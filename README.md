@@ -1,6 +1,6 @@
-# GLASS Backend (Barebones)
+# GLASS
 
-This is a Flask + SQLAlchemy JSON API skeleton for the GLASS ERD.
+backend and barebones testing ui
 
 ## Setup
 
