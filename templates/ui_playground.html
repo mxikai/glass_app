@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GLASS UI Playground</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/ui_playground.css') }}" />
+</head>
+<body>
+    <div class="page">
+        <header class="topbar">
+            <div class="title">
+                <span class="badge">UI Playground</span>
+                <h1>GLASS Test Console</h1>
+                <p>Run CRUD flows in one place and iterate on the layout as you go.</p>
+            </div>
+            <div class="meta">
+                <div class="chip">API Base: <span id="api-base">--</span></div>
+                <a class="ghost" href="/health" target="_blank" rel="noopener">/health</a>
+            </div>
+        </header>
+
+        <main class="grid">
+            <section class="panel">
+                <h2>Quick Actions</h2>
+                <p class="subtext">One-click GET requests for common endpoints.</p>
+                <div class="actions">
+                    <button class="action" data-method="GET" data-endpoint="/health">Health</button>
+                    <button class="action" data-method="GET" data-endpoint="/students">Students</button>
+                    <button class="action" data-method="GET" data-endpoint="/budget/plans">Budget Plans</button>
+                    <button class="action" data-method="GET" data-endpoint="/budget/buckets">Fund Buckets</button>
+                    <button class="action" data-method="GET" data-endpoint="/budget/items">Budget Items</button>
+                    <button class="action" data-method="GET" data-endpoint="/transactions">Transactions</button>
+                    <button class="action" data-method="GET" data-endpoint="/inventory">Inventory</button>
+                </div>
+                <div class="note">Need a fast manual test? Use the Request Builder.</div>
+            </section>
+
+            <section class="panel">
+                <h2>Request Builder</h2>
+                <form id="api-form" class="form">
+                    <label>
+                        Method
+                        <select id="api-method">
+                            <option>GET</option>
+                            <option>POST</option>
+                            <option>PUT</option>
+                            <option>PATCH</option>
+                            <option>DELETE</option>
+                        </select>
+                    </label>
+                    <label>
+                        Endpoint
+                        <input id="api-endpoint" type="text" placeholder="/students" />
+                    </label>
+                    <label>
+                        JSON Body
+                        <textarea id="api-body" rows="8" placeholder='{"example": "value"}'></textarea>
+                    </label>
+                    <div class="form-row">
+                        <button class="primary" type="submit">Send Request</button>
+                        <button class="ghost" type="button" id="clear-response">Clear Response</button>
+                    </div>
+                </form>
+            </section>
+
+            <section class="panel response-panel">
+                <h2>Response</h2>
+                <div class="response-meta">
+                    <span id="response-status">Status: --</span>
+                    <span id="response-time">Time: --</span>
+                    <span id="response-size">Size: --</span>
+                </div>
+                <pre id="response-output" class="code">Waiting for a request...</pre>
+            </section>
+
+            <section class="panel console-panel">
+                <div class="console-header">
+                    <div>
+                        <h2>Mock UI Console</h2>
+                        <p class="subtext">Create and update records without leaving the browser.</p>
+                    </div>
+                    <div class="console-actions">
+                        <button class="ghost" type="button" id="refresh-all">Refresh all lists</button>
+                    </div>
+                </div>
+                <div class="console-note">Create budget plans, buckets, and items before transactions and inventory.</div>
+
+                <section class="resource" data-resource="students" data-list-endpoint="/students">
+                    <div class="resource-header">
+                        <h3>Students</h3>
+                        <div class="resource-actions">
+                            <button class="ghost resource-button" type="button" data-action="list" data-endpoint="/students">Load list</button>
+                        </div>
+                    </div>
+                    <div class="resource-grid">
+                        <div class="resource-panel">
+                            <h4>List</h4>
+                            <div class="resource-status" data-status>Ready.</div>
+                            <pre class="code code-compact" data-output>No data yet.</pre>
+                        </div>
+                        <div class="resource-panel">
+                            <h4>Create</h4>
+                            <form class="resource-form" data-action="create" data-endpoint="/students">
+                                <label class="field">Student ID<input type="text" data-field="student_id" required /></label>
+                                <label class="field">Name<input type="text" data-field="name" required /></label>
+                                <label class="field">Program<input type="text" data-field="program" /></label>
+                                <label class="field">Year level<input type="number" data-type="integer" data-field="year_level" /></label>
+                                <label class="field">Role title<input type="text" data-field="role_title" /></label>
+                                <label class="field inline">
+                                    <span>Can approve</span>
+                                    <input type="checkbox" data-field="can_approve" />
+                                </label>
+                                <label class="field">Status<input type="text" data-field="status" placeholder="Active" /></label>
+                                <button class="primary" type="submit">Create student</button>
+                            </form>
+                        </div>
+                        <div class="resource-panel">
+                            <h4>Update</h4>
+                            <form class="resource-form" data-action="update" data-endpoint="/students" data-id-field="student_id">
+                                <label class="field">Student ID<input type="text" data-field="student_id" required /></label>
+                                <label class="field">Name<input type="text" data-field="name" /></label>
+                                <label class="field">Program<input type="text" data-field="program" /></label>
+                                <label class="field">Year level<input type="number" data-type="integer" data-field="year_level" /></label>
+                                <label class="field">Role title<input type="text" data-field="role_title" /></label>
+                                <label class="field inline">
+                                    <span>Can approve</span>
+                                    <input type="checkbox" data-field="can_approve" />
+                                </label>
+                                <label class="field">Status<input type="text" data-field="status" /></label>
+                                <div class="hint">Unchecked checkboxes are ignored. Use Request Builder to force false.</div>
+                                <button class="primary" type="submit">Update student</button>
+                            </form>
+                        </div>
+                        <div class="resource-panel">
+                            <h4>Delete</h4>
+                            <form class="resource-form" data-action="delete" data-endpoint="/students" data-id-field="student_id">
+                                <label class="field">Student ID<input type="text" data-field="student_id" required /></label>
+                                <button class="danger" type="submit">Delete student</button>
+                            </form>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="resource" data-resource="budget-plans" data-list-endpoint="/budget/plans">
+                    <div class="resource-header">
+                        <h3>Budget Plans</h3>
+                        <div class="resource-actions">
+                            <button class="ghost resource-button" type="button" data-action="list" data-endpoint="/budget/plans">Load list</button>
+                        </div>
+                    </div>
+                    <div class="resource-grid">
+                        <div class="resource-panel">
+                            <h4>List</h4>
+                            <div class="resource-status" data-status>Ready.</div>
+                            <pre class="code code-compact" data-output>No data yet.</pre>
+                        </div>
+                        <div class="resource-panel">
+                            <h4>Create</h4>
+                            <form class="resource-form" data-action="create" data-endpoint="/budget/plans">
+                                <label class="field">Academic year<input type="text" data-field="academic_year" placeholder="2025-2026" required /></label>
+                                <label class="field">Semester<input type="text" data-field="semester" placeholder="1st" required /></label>
+                                <label class="field">Total planned budget<input type="number" data-type="number" data-field="total_planned_budget" required /></label>
+                                <label class="field">Member count<input type="number" data-type="integer" data-field="member_count" required /></label>
+                                <label class="field">Semestral fee amount<input type="number" data-type="number" data-field="semestral_fee_amount" /></label>
+                                <label class="field">Approval status<input type="text" data-field="approval_status" placeholder="Pending" /></label>
+                                <label class="field">Approved date<input type="date" data-field="approved_date" /></label>
+                                <label class="field">Status<input type="text" data-field="status" placeholder="Active" /></label>
+                                <label class="field">Student IDs (comma separated)<input type="text" data-type="list" data-field="student_ids" placeholder="S001,S002" /></label>
+                                <button class="primary" type="submit">Create plan</button>
+                            </form>
+                        </div>
+                        <div class="resource-panel">
+                            <h4>Update</h4>
+                            <form class="resource-form" data-action="update" data-endpoint="/budget/plans" data-id-field="plan_id">
+                                <label class="field">Plan ID<input type="number" data-type="integer" data-field="plan_id" required /></label>
+                                <label class="field">Academic year<input type="text" data-field="academic_year" /></label>
+                                <label class="field">Semester<input type="text" data-field="semester" /></label>
+                                <label class="field">Total planned budget<input type="number" data-type="number" data-field="total_planned_budget" /></label>
+                                <label class="field">Member count<input type="number" data-type="integer" data-field="member_count" /></label>
+                                <label class="field">Semestral fee amount<input type="number" data-type="number" data-field="semestral_fee_amount" /></label>
+                                <label class="field">Approval status<input type="text" data-field="approval_status" /></label>
+                                <label class="field">Approved date<input type="date" data-field="approved_date" /></label>
+                                <label class="field">Status<input type="text" data-field="status" /></label>
+                                <label class="field">Student IDs (comma separated)<input type="text" data-type="list" data-field="student_ids" /></label>
+                                <button class="primary" type="submit">Update plan</button>
+                            </form>
+                        </div>
+                        <div class="resource-panel">
+                            <h4>Delete</h4>
+                            <form class="resource-form" data-action="delete" data-endpoint="/budget/plans" data-id-field="plan_id">
+                                <label class="field">Plan ID<input type="number" data-type="integer" data-field="plan_id" required /></label>
+                                <button class="danger" type="submit">Delete plan</button>
+                            </form>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="resource" data-resource="fund-buckets" data-list-endpoint="/budget/buckets">
+                    <div class="resource-header">
+                        <h3>Fund Buckets</h3>
+                        <div class="resource-actions">
+                            <button class="ghost resource-button" type="button" data-action="list" data-endpoint="/budget/buckets">Load list</button>
+                        </div>
+                    </div>
+                    <div class="resource-grid">
+                        <div class="resource-panel">
+                            <h4>List</h4>
+                            <div class="resource-status" data-status>Ready.</div>
+                            <pre class="code code-compact" data-output>No data yet.</pre>
+                        </div>
+                        <div class="resource-panel">
+                            <h4>Create</h4>
+                            <form class="resource-form" data-action="create" data-endpoint="/budget/buckets">
+                                <label class="field">Plan ID<input type="number" data-type="integer" data-field="plan_id" required /></label>
+                                <label class="field">Bucket name<input type="text" data-field="bucket_name" required /></label>
+                                <label class="field">Planned amount<input type="number" data-type="number" data-field="planned_amount" required /></label>
+                                <label class="field">Description<input type="text" data-field="description" /></label>
+                                <button class="primary" type="submit">Create bucket</button>
+                            </form>
+                        </div>
+                        <div class="resource-panel">
+                            <h4>Update</h4>
+                            <form class="resource-form" data-action="update" data-endpoint="/budget/buckets" data-id-field="bucket_id">
+                                <label class="field">Bucket ID<input type="number" data-type="integer" data-field="bucket_id" required /></label>
+                                <label class="field">Bucket name<input type="text" data-field="bucket_name" /></label>
+                                <label class="field">Planned amount<input type="number" data-type="number" data-field="planned_amount" /></label>
+                                <label class="field">Description<input type="text" data-field="description" /></label>
+                                <button class="primary" type="submit">Update bucket</button>
+                            </form>
+                        </div>
+                        <div class="resource-panel">
+                            <h4>Delete</h4>
+                            <form class="resource-form" data-action="delete" data-endpoint="/budget/buckets" data-id-field="bucket_id">
+                                <label class="field">Bucket ID<input type="number" data-type="integer" data-field="bucket_id" required /></label>
+                                <button class="danger" type="submit">Delete bucket</button>
+                            </form>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="resource" data-resource="budget-items" data-list-endpoint="/budget/items">
+                    <div class="resource-header">
+                        <h3>Budget Items</h3>
+                        <div class="resource-actions">
+                            <button class="ghost resource-button" type="button" data-action="list" data-endpoint="/budget/items">Load list</button>
+                        </div>
+                    </div>
+                    <div class="resource-grid">
+                        <div class="resource-panel">
+                            <h4>List</h4>
+                            <div class="resource-status" data-status>Ready.</div>
+                            <pre class="code code-compact" data-output>No data yet.</pre>
+                        </div>
+                        <div class="resource-panel">
+                            <h4>Create</h4>
+                            <form class="resource-form" data-action="create" data-endpoint="/budget/items">
+                                <label class="field">Bucket ID<input type="number" data-type="integer" data-field="bucket_id" required /></label>
+                                <label class="field">Item name<input type="text" data-field="item_name" required /></label>
+                                <label class="field">Item type<input type="text" data-field="item_type" /></label>
+                                <label class="field">Planned amount<input type="number" data-type="number" data-field="planned_amount" required /></label>
+                                <label class="field">Description<input type="text" data-field="description" /></label>
+                                <button class="primary" type="submit">Create item</button>
+                            </form>
+                        </div>
+                        <div class="resource-panel">
+                            <h4>Update</h4>
+                            <form class="resource-form" data-action="update" data-endpoint="/budget/items" data-id-field="budget_item_id">
+                                <label class="field">Budget item ID<input type="number" data-type="integer" data-field="budget_item_id" required /></label>
+                                <label class="field">Item name<input type="text" data-field="item_name" /></label>
+                                <label class="field">Item type<input type="text" data-field="item_type" /></label>
+                                <label class="field">Planned amount<input type="number" data-type="number" data-field="planned_amount" /></label>
+                                <label class="field">Description<input type="text" data-field="description" /></label>
+                                <button class="primary" type="submit">Update item</button>
+                            </form>
+                        </div>
+                        <div class="resource-panel">
+                            <h4>Delete</h4>
+                            <form class="resource-form" data-action="delete" data-endpoint="/budget/items" data-id-field="budget_item_id">
+                                <label class="field">Budget item ID<input type="number" data-type="integer" data-field="budget_item_id" required /></label>
+                                <button class="danger" type="submit">Delete item</button>
+                            </form>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="resource" data-resource="transactions" data-list-endpoint="/transactions">
+                    <div class="resource-header">
+                        <h3>Transactions</h3>
+                        <div class="resource-actions">
+                            <button class="ghost resource-button" type="button" data-action="list" data-endpoint="/transactions">Load list</button>
+                        </div>
+                    </div>
+                    <div class="resource-grid">
+                        <div class="resource-panel">
+                            <h4>List</h4>
+                            <div class="resource-status" data-status>Ready.</div>
+                            <pre class="code code-compact" data-output>No data yet.</pre>
+                        </div>
+                        <div class="resource-panel">
+                            <h4>Create</h4>
+                            <form class="resource-form" data-action="create" data-endpoint="/transactions">
+                                <label class="field">Plan ID<input type="number" data-type="integer" data-field="plan_id" required /></label>
+                                <label class="field">Transaction type
+                                    <select data-field="transaction_type" data-type="upper" required>
+                                        <option value="">Select type</option>
+                                        <option value="PAYMENT">PAYMENT</option>
+                                        <option value="EXPENSE">EXPENSE</option>
+                                    </select>
+                                </label>
+                                <label class="field">Amount<input type="number" data-type="number" data-field="amount" required /></label>
+                                <label class="field">Student ID (for PAYMENT)<input type="text" data-field="student_id" /></label>
+                                <label class="field">Budget item ID (for EXPENSE)<input type="number" data-type="integer" data-field="budget_item_id" /></label>
+                                <label class="field">Approver ID<input type="text" data-field="approver_id" /></label>
+                                <label class="field">Transaction status<input type="text" data-field="transaction_status" placeholder="Active" /></label>
+                                <label class="field">Approval status<input type="text" data-field="approval_status" placeholder="Pending" /></label>
+                                <label class="field">Transaction date<input type="datetime-local" data-field="transaction_date" /></label>
+                                <label class="field">Notes<textarea rows="3" data-field="notes"></textarea></label>
+                                <label class="field">Receipt path<input type="text" data-field="receipt_path" /></label>
+                                <div class="hint">PAYMENT needs student_id. EXPENSE needs budget_item_id.</div>
+                                <button class="primary" type="submit">Create transaction</button>
+                            </form>
+                        </div>
+                        <div class="resource-panel">
+                            <h4>Update</h4>
+                            <form class="resource-form" data-action="update" data-endpoint="/transactions" data-id-field="transaction_id">
+                                <label class="field">Transaction ID<input type="number" data-type="integer" data-field="transaction_id" required /></label>
+                                <label class="field">Plan ID<input type="number" data-type="integer" data-field="plan_id" /></label>
+                                <label class="field">Transaction type
+                                    <select data-field="transaction_type" data-type="upper">
+                                        <option value="">Leave unchanged</option>
+                                        <option value="PAYMENT">PAYMENT</option>
+                                        <option value="EXPENSE">EXPENSE</option>
+                                    </select>
+                                </label>
+                                <label class="field">Amount<input type="number" data-type="number" data-field="amount" /></label>
+                                <label class="field">Student ID<input type="text" data-field="student_id" /></label>
+                                <label class="field">Budget item ID<input type="number" data-type="integer" data-field="budget_item_id" /></label>
+                                <label class="field">Approver ID<input type="text" data-field="approver_id" /></label>
+                                <label class="field">Transaction status<input type="text" data-field="transaction_status" /></label>
+                                <label class="field">Approval status<input type="text" data-field="approval_status" /></label>
+                                <label class="field">Transaction date<input type="datetime-local" data-field="transaction_date" /></label>
+                                <label class="field">Notes<textarea rows="3" data-field="notes"></textarea></label>
+                                <label class="field">Receipt path<input type="text" data-field="receipt_path" /></label>
+                                <button class="primary" type="submit">Update transaction</button>
+                            </form>
+                        </div>
+                        <div class="resource-panel">
+                            <h4>Delete</h4>
+                            <form class="resource-form" data-action="delete" data-endpoint="/transactions" data-id-field="transaction_id">
+                                <label class="field">Transaction ID<input type="number" data-type="integer" data-field="transaction_id" required /></label>
+                                <button class="danger" type="submit">Delete transaction</button>
+                            </form>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="resource" data-resource="inventory" data-list-endpoint="/inventory">
+                    <div class="resource-header">
+                        <h3>Inventory</h3>
+                        <div class="resource-actions">
+                            <button class="ghost resource-button" type="button" data-action="list" data-endpoint="/inventory">Load list</button>
+                        </div>
+                    </div>
+                    <div class="resource-grid">
+                        <div class="resource-panel">
+                            <h4>List</h4>
+                            <div class="resource-status" data-status>Ready.</div>
+                            <pre class="code code-compact" data-output>No data yet.</pre>
+                        </div>
+                        <div class="resource-panel">
+                            <h4>Create</h4>
+                            <form class="resource-form" data-action="create" data-endpoint="/inventory">
+                                <label class="field">Transaction ID<input type="number" data-type="integer" data-field="transaction_id" required /></label>
+                                <label class="field">Item name<input type="text" data-field="item_name" required /></label>
+                                <label class="field">Quantity<input type="number" data-type="integer" data-field="quantity" /></label>
+                                <label class="field">Item condition<input type="text" data-field="item_condition" /></label>
+                                <label class="field">Status<input type="text" data-field="status" placeholder="Active" /></label>
+                                <label class="field">Date recorded<input type="date" data-field="date_recorded" /></label>
+                                <button class="primary" type="submit">Create inventory item</button>
+                            </form>
+                        </div>
+                        <div class="resource-panel">
+                            <h4>Update</h4>
+                            <form class="resource-form" data-action="update" data-endpoint="/inventory" data-id-field="inventory_item_id">
+                                <label class="field">Inventory item ID<input type="number" data-type="integer" data-field="inventory_item_id" required /></label>
+                                <label class="field">Item name<input type="text" data-field="item_name" /></label>
+                                <label class="field">Quantity<input type="number" data-type="integer" data-field="quantity" /></label>
+                                <label class="field">Item condition<input type="text" data-field="item_condition" /></label>
+                                <label class="field">Status<input type="text" data-field="status" /></label>
+                                <label class="field">Date recorded<input type="date" data-field="date_recorded" /></label>
+                                <button class="primary" type="submit">Update inventory item</button>
+                            </form>
+                        </div>
+                        <div class="resource-panel">
+                            <h4>Delete</h4>
+                            <form class="resource-form" data-action="delete" data-endpoint="/inventory" data-id-field="inventory_item_id">
+                                <label class="field">Inventory item ID<input type="number" data-type="integer" data-field="inventory_item_id" required /></label>
+                                <button class="danger" type="submit">Delete inventory item</button>
+                            </form>
+                        </div>
+                    </div>
+                </section>
+            </section>
+        </main>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/ui_playground.js') }}"></script>
+</body>
+</html>
