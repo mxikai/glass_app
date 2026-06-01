@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from flask import Flask, jsonify, render_template
+from flask import Flask, jsonify
 
 from config import DEBUG
 from routes.budget_routes import bp as budget_bp
@@ -24,10 +24,6 @@ def create_app() -> Flask:
     @app.get("/health")
     def health_check():
         return jsonify({"status": "ok"})
-
-    @app.get("/ui")
-    def ui_playground():
-        return render_template("ui_playground.html")
 
     init_db()
     return app

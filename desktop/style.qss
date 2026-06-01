@@ -1,34 +1,119 @@
-/* Minimal placeholder for Figma-inspired styling. */
+QWidget {
+    background: #ffffff;
+    color: #1f2933;
+    font-size: 13px;
+}
 
-QMainWindow {
-    background: #f5f3ff;
+QMainWindow,
+QTabWidget::pane,
+QScrollArea,
+QScrollArea > QWidget > QWidget {
+    background: #ffffff;
+}
+
+QTabBar::tab {
+    background: #f5f7fa;
+    color: #1f2933;
+    border: 1px solid #cbd2d9;
+    border-bottom: none;
+    padding: 8px 14px;
+}
+
+QTabBar::tab:selected {
+    background: #ffffff;
+    font-weight: 600;
 }
 
 QGroupBox {
+    background: #ffffff;
+    color: #1f2933;
     font-weight: 600;
-    border: 1px solid #dcd7f5;
-    border-radius: 8px;
+    border: 1px solid #cbd2d9;
+    border-radius: 4px;
     margin-top: 12px;
-    padding: 8px;
+    padding: 10px;
 }
 
 QGroupBox::title {
     subcontrol-origin: margin;
     left: 8px;
     padding: 0 4px;
+    background: #ffffff;
+}
+
+QLabel {
+    background: transparent;
+    color: #1f2933;
+}
+
+QLineEdit,
+QTextEdit,
+QComboBox,
+QSpinBox,
+QDoubleSpinBox,
+QListWidget {
+    background: #ffffff;
+    color: #1f2933;
+    border: 1px solid #9aa5b1;
+    border-radius: 3px;
+    padding: 5px;
+    selection-background-color: #d9e2ec;
+    selection-color: #102a43;
+}
+
+QLineEdit:read-only {
+    background: #f5f7fa;
+    color: #52606d;
 }
 
 QPushButton {
-    padding: 6px 12px;
+    background: #f5f7fa;
+    color: #1f2933;
+    border: 1px solid #9aa5b1;
+    border-radius: 3px;
+    padding: 7px 12px;
+}
+
+QPushButton:hover {
+    background: #e4e7eb;
+}
+
+QPushButton:pressed {
+    background: #d9e2ec;
 }
 
 QTableWidget {
     background: #ffffff;
-    gridline-color: #e6e1f5;
+    color: #1f2933;
+    alternate-background-color: #f5f7fa;
+    gridline-color: #cbd2d9;
+    border: 1px solid #9aa5b1;
+    selection-background-color: #bcccdc;
+    selection-color: #102a43;
+}
+
+QTableWidget::item {
+    background: transparent;
+    color: #1f2933;
+    padding: 4px;
+}
+
+QTableWidget::item:selected {
+    background: #bcccdc;
+    color: #102a43;
 }
 
 QHeaderView::section {
-    background: #f0ecff;
-    padding: 6px;
-    border: none;
+    background: #e4e7eb;
+    color: #1f2933;
+    padding: 7px;
+    border: 0;
+    border-right: 1px solid #cbd2d9;
+    border-bottom: 1px solid #9aa5b1;
+    font-weight: 600;
+}
+
+QCheckBox {
+    background: transparent;
+    color: #1f2933;
 }
