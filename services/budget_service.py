@@ -1,34 +1,137 @@
 from __future__ import annotations
 
-from datetime import date
 from decimal import Decimal
 
 from models.budget_item_model import BudgetItem
 from models.budget_plan_model import BudgetPlan
 from models.fund_bucket_model import FundBucket
 from models.student_model import Student
+from models.transaction_model import Transaction
 from utils.db import session_scope
-from utils.validators import require_fields
-
-
-def _to_decimal(value) -> Decimal | None:
-    if value is None:
-        return None
-    return Decimal(str(value))
-
-
-def _parse_date(value) -> date | None:
-    if not value:
-        return None
-    if isinstance(value, date):
-        return value
-    return date.fromisoformat(str(value))
+from utils.validators import (
+    APPROVAL_STATUSES,
+    PLAN_STATUSES,
+    SEMESTERS,
+    academic_year_value,
+    choice_value,
+    decimal_value,
+    int_value,
+    iso_date_value,
+    optional_student_id_value,
+    text_value,
+)
 
 
 def _compute_fee(total_planned_budget, member_count) -> Decimal:
     if member_count is None or int(member_count) <= 0:
         raise ValueError("member_count must be greater than 0")
-    return _to_decimal(total_planned_budget) / Decimal(str(member_count))
+    return Decimal(str(total_planned_budget)) / Decimal(str(member_count))
+
+
+def _student_ids_value(value, *, required: bool = False) -> list[str]:
+    if value is None:
+        if required:
+            raise ValueError("student_ids is required")
+        return []
+    if not isinstance(value, list):
+        raise ValueError("student_ids must be a list")
+    student_ids = [optional_student_id_value(item) for item in value]
+    normalized = [student_id for student_id in student_ids if student_id]
+    if len(normalized) != len(student_ids):
+        raise ValueError("student_ids cannot include blank values")
+    if len(normalized) != len(set(normalized)):
+        raise ValueError("student_ids cannot include duplicates")
+    return normalized
+
+
+def _load_students(session, student_ids: list[str]) -> list[Student]:
+    if not student_ids:
+        return []
+    students = (
+        session.query(Student)
+        .filter(Student.student_id.in_(student_ids))
+        .all()
+    )
+    if len(students) != len(set(student_ids)):
+        raise ValueError("One or more student_ids are invalid")
+    return students
+
+
+def _validate_plan_payload(
+    data: dict,
+    *,
+    current: dict | None = None,
+    allow_missing_student_ids: bool = True,
+) -> dict:
+    source = {**(current or {}), **data}
+    student_ids = _student_ids_value(
+        source.get("student_ids"),
+        required=not allow_missing_student_ids,
+    )
+    member_count = int_value(
+        source.get("member_count"),
+        "member_count",
+        min_value=1,
+    )
+    if "student_ids" in source and member_count != len(student_ids):
+        raise ValueError("member_count must match the number of student_ids")
+
+    total_planned_budget = decimal_value(
+        source.get("total_planned_budget"),
+        "total_planned_budget",
+    )
+    semestral_fee_amount = decimal_value(
+        source.get("semestral_fee_amount"),
+        "semestral_fee_amount",
+        required=False,
+    )
+    if semestral_fee_amount is None:
+        semestral_fee_amount = _compute_fee(total_planned_budget, member_count)
+
+    return {
+        "academic_year": academic_year_value(source.get("academic_year")),
+        "semester": choice_value(source.get("semester"), "semester", SEMESTERS),
+        "total_planned_budget": total_planned_budget,
+        "member_count": member_count,
+        "semestral_fee_amount": semestral_fee_amount,
+        "approval_status": choice_value(
+            source.get("approval_status"),
+            "approval_status",
+            APPROVAL_STATUSES,
+            default="Pending",
+        ),
+        "approved_date": iso_date_value(
+            source.get("approved_date"),
+            "approved_date",
+            no_future=True,
+        ),
+        "status": choice_value(
+            source.get("status"),
+            "status",
+            PLAN_STATUSES,
+            default="Active",
+        ),
+        "student_ids": student_ids,
+    }
+
+
+def _bucket_payload(data: dict, *, current: dict | None = None) -> dict:
+    source = {**(current or {}), **data}
+    return {
+        "bucket_name": text_value(source.get("bucket_name"), "bucket_name", required=True, max_length=120),
+        "planned_amount": decimal_value(source.get("planned_amount"), "planned_amount"),
+        "description": text_value(source.get("description"), "description", max_length=255),
+    }
+
+
+def _item_payload(data: dict, *, current: dict | None = None) -> dict:
+    source = {**(current or {}), **data}
+    return {
+        "item_name": text_value(source.get("item_name"), "item_name", required=True, max_length=120),
+        "item_type": text_value(source.get("item_type"), "item_type", max_length=50),
+        "planned_amount": decimal_value(source.get("planned_amount"), "planned_amount"),
+        "description": text_value(source.get("description"), "description", max_length=255),
+    }
 
 
 # Budget plans
@@ -46,37 +149,23 @@ def get_budget_plan(plan_id: int) -> dict | None:
 
 
 def create_budget_plan(data: dict) -> dict:
-    require_fields(data, ["academic_year", "semester", "total_planned_budget", "member_count"])
-
-    total_planned_budget = _to_decimal(data["total_planned_budget"])
-    member_count = int(data["member_count"])
-
-    semestral_fee_amount = _to_decimal(data.get("semestral_fee_amount"))
-    if semestral_fee_amount is None:
-        semestral_fee_amount = _compute_fee(total_planned_budget, member_count)
+    payload = _validate_plan_payload(data)
 
     with session_scope() as session:
         plan = BudgetPlan(
-            academic_year=data["academic_year"],
-            semester=data["semester"],
-            total_planned_budget=total_planned_budget,
-            member_count=member_count,
-            semestral_fee_amount=semestral_fee_amount,
-            approval_status=data.get("approval_status", "Pending"),
-            approved_date=_parse_date(data.get("approved_date")),
-            status=data.get("status", "Active"),
+            academic_year=payload["academic_year"],
+            semester=payload["semester"],
+            total_planned_budget=payload["total_planned_budget"],
+            member_count=payload["member_count"],
+            semestral_fee_amount=payload["semestral_fee_amount"],
+            approval_status=payload["approval_status"],
+            approved_date=payload["approved_date"],
+            status=payload["status"],
         )
 
-        student_ids = data.get("student_ids") or []
+        student_ids = payload["student_ids"]
         if student_ids:
-            students = (
-                session.query(Student)
-                .filter(Student.student_id.in_(student_ids))
-                .all()
-            )
-            if len(students) != len(set(student_ids)):
-                raise ValueError("One or more student_ids are invalid")
-            plan.students = students
+            plan.students = _load_students(session, student_ids)
 
         session.add(plan)
         session.flush()
@@ -89,34 +178,47 @@ def update_budget_plan(plan_id: int, data: dict) -> dict | None:
         if not plan:
             return None
 
-        for field in ["academic_year", "semester", "approval_status", "status"]:
-            if field in data:
-                setattr(plan, field, data[field])
-
-        if "approved_date" in data:
-            plan.approved_date = _parse_date(data.get("approved_date"))
-
-        if "total_planned_budget" in data:
-            plan.total_planned_budget = _to_decimal(data.get("total_planned_budget"))
-
-        if "member_count" in data:
-            plan.member_count = int(data.get("member_count"))
-
-        if "semestral_fee_amount" in data:
-            plan.semestral_fee_amount = _to_decimal(data.get("semestral_fee_amount"))
-        elif "total_planned_budget" in data or "member_count" in data:
-            plan.semestral_fee_amount = _compute_fee(plan.total_planned_budget, plan.member_count)
+        current = plan.to_dict()
+        payload = _validate_plan_payload(data, current=current)
+        if "semestral_fee_amount" not in data and (
+            "total_planned_budget" in data or "member_count" in data
+        ):
+            payload["semestral_fee_amount"] = _compute_fee(
+                payload["total_planned_budget"],
+                payload["member_count"],
+            )
 
         if "student_ids" in data:
-            student_ids = data.get("student_ids") or []
-            students = (
-                session.query(Student)
-                .filter(Student.student_id.in_(student_ids))
-                .all()
-            )
-            if len(students) != len(set(student_ids)):
-                raise ValueError("One or more student_ids are invalid")
+            student_ids = payload["student_ids"]
+            removed_ids = set(current.get("student_ids") or []) - set(student_ids)
+            if removed_ids:
+                transaction_count = (
+                    session.query(Transaction)
+                    .filter(
+                        Transaction.plan_id == plan_id,
+                        Transaction.student_id.in_(removed_ids),
+                    )
+                    .count()
+                )
+                if transaction_count:
+                    raise ValueError(
+                        "Cannot remove student(s) from this plan because they already "
+                        f"have {transaction_count} transaction(s) in it."
+                    )
+            students = _load_students(session, student_ids)
             plan.students = students
+
+        for field in [
+            "academic_year",
+            "semester",
+            "total_planned_budget",
+            "member_count",
+            "semestral_fee_amount",
+            "approval_status",
+            "approved_date",
+            "status",
+        ]:
+            setattr(plan, field, payload[field])
 
         session.flush()
         return plan.to_dict()
@@ -127,6 +229,16 @@ def delete_budget_plan(plan_id: int) -> bool:
         plan = session.get(BudgetPlan, plan_id)
         if not plan:
             return False
+        transaction_count = (
+            session.query(Transaction)
+            .filter(Transaction.plan_id == plan_id)
+            .count()
+        )
+        if transaction_count:
+            raise ValueError(
+                f"Cannot delete plan #{plan_id} because it has {transaction_count} "
+                "transaction(s). Set status to Archived instead."
+            )
         session.delete(plan)
         return True
 
@@ -146,18 +258,19 @@ def get_fund_bucket(bucket_id: int) -> dict | None:
 
 
 def create_fund_bucket(data: dict) -> dict:
-    require_fields(data, ["plan_id", "bucket_name", "planned_amount"])
+    plan_id = int_value(data.get("plan_id"), "plan_id", min_value=1)
+    payload = _bucket_payload(data)
 
     with session_scope() as session:
-        plan = session.get(BudgetPlan, data["plan_id"])
+        plan = session.get(BudgetPlan, plan_id)
         if not plan:
             raise ValueError("Invalid plan_id")
 
         bucket = FundBucket(
-            plan_id=data["plan_id"],
-            bucket_name=data["bucket_name"],
-            planned_amount=_to_decimal(data["planned_amount"]),
-            description=data.get("description"),
+            plan_id=plan_id,
+            bucket_name=payload["bucket_name"],
+            planned_amount=payload["planned_amount"],
+            description=payload["description"],
         )
         session.add(bucket)
         session.flush()
@@ -170,12 +283,9 @@ def update_fund_bucket(bucket_id: int, data: dict) -> dict | None:
         if not bucket:
             return None
 
-        for field in ["bucket_name", "description"]:
-            if field in data:
-                setattr(bucket, field, data[field])
-
-        if "planned_amount" in data:
-            bucket.planned_amount = _to_decimal(data.get("planned_amount"))
+        payload = _bucket_payload(data, current=bucket.to_dict())
+        for field in ["bucket_name", "planned_amount", "description"]:
+            setattr(bucket, field, payload[field])
 
         session.flush()
         return bucket.to_dict()
@@ -186,6 +296,19 @@ def delete_fund_bucket(bucket_id: int) -> bool:
         bucket = session.get(FundBucket, bucket_id)
         if not bucket:
             return False
+        item_ids = [item.budget_item_id for item in bucket.budget_items]
+        transaction_count = 0
+        if item_ids:
+            transaction_count = (
+                session.query(Transaction)
+                .filter(Transaction.budget_item_id.in_(item_ids))
+                .count()
+            )
+        if transaction_count:
+            raise ValueError(
+                f"Cannot delete bucket #{bucket_id} because its items have "
+                f"{transaction_count} transaction(s). Delete or void those records first."
+            )
         session.delete(bucket)
         return True
 
@@ -205,19 +328,20 @@ def get_budget_item(item_id: int) -> dict | None:
 
 
 def create_budget_item(data: dict) -> dict:
-    require_fields(data, ["bucket_id", "item_name", "planned_amount"])
+    bucket_id = int_value(data.get("bucket_id"), "bucket_id", min_value=1)
+    payload = _item_payload(data)
 
     with session_scope() as session:
-        bucket = session.get(FundBucket, data["bucket_id"])
+        bucket = session.get(FundBucket, bucket_id)
         if not bucket:
             raise ValueError("Invalid bucket_id")
 
         item = BudgetItem(
-            bucket_id=data["bucket_id"],
-            item_name=data["item_name"],
-            item_type=data.get("item_type"),
-            planned_amount=_to_decimal(data["planned_amount"]),
-            description=data.get("description"),
+            bucket_id=bucket_id,
+            item_name=payload["item_name"],
+            item_type=payload["item_type"],
+            planned_amount=payload["planned_amount"],
+            description=payload["description"],
         )
         session.add(item)
         session.flush()
@@ -230,12 +354,9 @@ def update_budget_item(item_id: int, data: dict) -> dict | None:
         if not item:
             return None
 
-        for field in ["item_name", "item_type", "description"]:
-            if field in data:
-                setattr(item, field, data[field])
-
-        if "planned_amount" in data:
-            item.planned_amount = _to_decimal(data.get("planned_amount"))
+        payload = _item_payload(data, current=item.to_dict())
+        for field in ["item_name", "item_type", "planned_amount", "description"]:
+            setattr(item, field, payload[field])
 
         session.flush()
         return item.to_dict()
@@ -246,5 +367,15 @@ def delete_budget_item(item_id: int) -> bool:
         item = session.get(BudgetItem, item_id)
         if not item:
             return False
+        transaction_count = (
+            session.query(Transaction)
+            .filter(Transaction.budget_item_id == item_id)
+            .count()
+        )
+        if transaction_count:
+            raise ValueError(
+                f"Cannot delete budget item #{item_id} because it has "
+                f"{transaction_count} transaction(s)."
+            )
         session.delete(item)
         return True

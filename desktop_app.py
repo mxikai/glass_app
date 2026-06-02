@@ -83,7 +83,7 @@ def optional_text(widget: QLineEdit | QTextEdit) -> str | None:
     if isinstance(widget, QTextEdit):
         text = widget.toPlainText().strip()
     else:
-        text = widget.text().strip()
+        text = input_text(widget)
     return text or None
 
 
@@ -165,7 +165,9 @@ class DataTable(QTableWidget):
     def __init__(self, columns: list[tuple[str, str]], min_height: int = 180) -> None:
         super().__init__()
         self._columns = columns
+        self._source_rows: list[dict] = []
         self._rows: list[dict] = []
+        self._filter_text = ""
 
         self.setColumnCount(len(columns))
         self.setHorizontalHeaderLabels([label for _, label in columns])
@@ -178,8 +180,27 @@ class DataTable(QTableWidget):
         self.horizontalHeader().setStretchLastSection(True)
 
     def set_rows(self, rows: list[dict]) -> None:
-        self._rows = list(rows)
+        self._source_rows = list(rows)
+        self._apply_filter()
+
+    def set_filter_text(self, text: str) -> None:
+        self._filter_text = text.strip().lower()
+        self._apply_filter()
+
+    def _apply_filter(self) -> None:
+        if self._filter_text:
+            self._rows = [
+                row
+                for row in self._source_rows
+                if self._filter_text in " ".join(
+                    table_text(row.get(key)).lower() for key, _ in self._columns
+                )
+            ]
+        else:
+            self._rows = list(self._source_rows)
+
         self.blockSignals(True)
+        self.clearSelection()
         self.clearContents()
         self.setColumnCount(len(self._columns))
         self.setHorizontalHeaderLabels([label for _, label in self._columns])
@@ -212,6 +233,25 @@ class DataTable(QTableWidget):
         return False
 
 
+def make_table_search(table: DataTable, placeholder: str = "Search records") -> QLineEdit:
+    search = QLineEdit()
+    search.setPlaceholderText(placeholder)
+    search.textChanged.connect(table.set_filter_text)
+    return search
+
+
+def joined_counts(parts: list[tuple[int, str]]) -> str:
+    visible = [f"{count} {label}" for count, label in parts if count]
+    return ", ".join(visible) if visible else "no dependent records"
+
+
+def input_text(widget: QLineEdit) -> str:
+    text = widget.text().replace("_", "").strip()
+    if not any(char.isalnum() for char in text):
+        return ""
+    return text
+
+
 class WorkflowTab(QWidget):
     def __init__(self) -> None:
         super().__init__()
@@ -236,6 +276,13 @@ class WorkflowTab(QWidget):
             QMessageBox.No,
         )
         return result == QMessageBox.Yes
+
+    def refresh_related_tabs(self) -> None:
+        window = self.window()
+        tabs = getattr(window, "workflow_tabs", [])
+        for tab in tabs:
+            if tab is not self and isinstance(tab, WorkflowTab):
+                tab.refresh()
 
     def refresh(self) -> None:
         pass
@@ -301,6 +348,7 @@ class OverviewTab(WorkflowTab):
         self.active_plan.setWordWrap(True)
         layout.addWidget(self.active_plan)
 
+        layout.addWidget(make_table_search(self.recent_transactions, "Search recent transactions"))
         recent_group = QGroupBox("Recent Transactions")
         recent_layout = QVBoxLayout()
         recent_layout.addWidget(self.recent_transactions)
@@ -387,6 +435,8 @@ class MembersTab(WorkflowTab):
         self.table.itemSelectionChanged.connect(self.load_selected)
 
         self.student_id = QLineEdit()
+        self.student_id.setInputMask("0000-0000;_")
+        self.student_id.setPlaceholderText("2024-0001")
         self.name = QLineEdit()
         self.program = QLineEdit()
         self.year_level = QComboBox()
@@ -395,7 +445,7 @@ class MembersTab(WorkflowTab):
             self.year_level.addItem(str(year), year)
         self.role_title = QLineEdit()
         self.can_approve = QCheckBox("Can approve organization transactions")
-        self.status_combo = make_status_combo(("Active", "Inactive", "Alumni"), editable=True)
+        self.status_combo = make_status_combo(("Active", "Inactive", "Alumni"))
 
         form = QFormLayout()
         form.addRow("Student ID", self.student_id)
@@ -413,18 +463,23 @@ class MembersTab(WorkflowTab):
         save_button.clicked.connect(self.save_member)
         new_button = QPushButton("New")
         new_button.clicked.connect(self.clear_form)
-        delete_button = QPushButton("Delete Selected")
-        delete_button.clicked.connect(self.delete_selected)
+        self.delete_button = QPushButton("Delete Selected")
+        self.delete_button.setEnabled(False)
+        self.delete_button.clicked.connect(self.delete_selected)
+        self.table.itemSelectionChanged.connect(
+            lambda: self.delete_button.setEnabled(self.table.selected_record() is not None)
+        )
 
         buttons = QHBoxLayout()
         buttons.addWidget(save_button)
         buttons.addWidget(new_button)
-        buttons.addWidget(delete_button)
+        buttons.addWidget(self.delete_button)
         buttons.addStretch()
 
         layout = QVBoxLayout()
         layout.setSpacing(16)
         layout.addWidget(QLabel("Students are the organization members. Officers are students with roles and approval authority."))
+        layout.addWidget(make_table_search(self.table, "Search members"))
         layout.addWidget(self.table)
         layout.addWidget(form_group)
         layout.addLayout(buttons)
@@ -445,6 +500,7 @@ class MembersTab(WorkflowTab):
         if not row:
             return
         self.student_id.setText(row.get("student_id") or "")
+        self.student_id.setReadOnly(True)
         self.name.setText(row.get("name") or "")
         self.program.setText(row.get("program") or "")
         set_combo_value(self.year_level, row.get("year_level"))
@@ -454,6 +510,7 @@ class MembersTab(WorkflowTab):
 
     def clear_form(self) -> None:
         self.table.clearSelection()
+        self.student_id.setReadOnly(False)
         self.student_id.clear()
         self.name.clear()
         self.program.clear()
@@ -464,8 +521,8 @@ class MembersTab(WorkflowTab):
         self.set_status("Ready for a new member.")
 
     def save_member(self) -> None:
-        student_id = self.student_id.text().strip()
-        name = self.name.text().strip()
+        student_id = input_text(self.student_id)
+        name = input_text(self.name)
         if not student_id or not name:
             self.show_error("Member save failed", "Student ID and name are required.")
             return
@@ -494,6 +551,7 @@ class MembersTab(WorkflowTab):
             return
 
         self.refresh()
+        self.refresh_related_tabs()
         self.table.select_record_by_key("student_id", student_id)
 
     def delete_selected(self) -> None:
@@ -502,7 +560,29 @@ class MembersTab(WorkflowTab):
             self.show_error("Delete failed", "Select a member first.")
             return
         student_id = row.get("student_id")
-        if not self.confirm("Delete Member", f"Delete {student_id}? This cannot be undone."):
+        try:
+            transactions = list_transactions()
+        except Exception:
+            transactions = []
+        impact = joined_counts(
+            [
+                (len(row.get("plan_ids") or []), "budget plan link(s)"),
+                (
+                    sum(1 for transaction in transactions if transaction.get("student_id") == student_id),
+                    "payment transaction(s)",
+                ),
+                (
+                    sum(1 for transaction in transactions if transaction.get("approver_id") == student_id),
+                    "approved transaction(s)",
+                ),
+            ]
+        )
+        if not self.confirm(
+            "Delete Member",
+            f"Delete {student_id} - {row.get('name') or 'member'}?\n\n"
+            f"Impact: {impact}.\n"
+            "Linked members cannot be deleted; use Inactive or Alumni instead.",
+        ):
             return
         try:
             deleted = delete_student(student_id)
@@ -514,6 +594,7 @@ class MembersTab(WorkflowTab):
             return
         self.clear_form()
         self.refresh()
+        self.refresh_related_tabs()
 
 
 class BudgetPlanningTab(WorkflowTab):
@@ -523,6 +604,7 @@ class BudgetPlanningTab(WorkflowTab):
         self.plans: list[dict] = []
         self.buckets: list[dict] = []
         self.items: list[dict] = []
+        self.transactions: list[dict] = []
         self.current_plan_id: int | None = None
         self.current_bucket_id: int | None = None
         self.current_item_id: int | None = None
@@ -562,22 +644,29 @@ class BudgetPlanningTab(WorkflowTab):
         self.plan_table.itemSelectionChanged.connect(self.load_selected_plan)
         self.bucket_table.itemSelectionChanged.connect(self.load_selected_bucket)
         self.item_table.itemSelectionChanged.connect(self.load_selected_item)
+        self.plan_table.itemSelectionChanged.connect(self.update_delete_buttons)
+        self.bucket_table.itemSelectionChanged.connect(self.update_delete_buttons)
+        self.item_table.itemSelectionChanged.connect(self.update_delete_buttons)
 
         self.plan_id = QLineEdit()
         self.plan_id.setReadOnly(True)
         self.academic_year = QLineEdit()
+        self.academic_year.setInputMask("0000-0000;_")
         self.academic_year.setPlaceholderText("2025-2026")
-        self.semester = make_status_combo(("1st", "2nd", "Midyear"), editable=True)
+        self.semester = make_status_combo(("1st", "2nd", "Midyear"))
         self.total_budget = make_money_input()
-        self.approval_status = make_status_combo(("Pending", "Approved", "Rejected"), editable=True)
+        self.approval_status = make_status_combo(("Pending", "Approved", "Rejected"))
         self.approved_date = QLineEdit()
+        self.approved_date.setInputMask("0000-00-00;_")
         self.approved_date.setPlaceholderText("YYYY-MM-DD")
-        self.plan_status = make_status_combo(("Active", "Archived"), editable=True)
+        self.plan_status = make_status_combo(("Active", "Archived"))
         self.member_list = QListWidget()
         self.member_list.setSelectionMode(QAbstractItemView.MultiSelection)
         self.member_list.setMinimumHeight(150)
         self.member_count = QLabel("0 members")
         self.fee_preview = QLabel("PHP 0.00")
+        self.bucket_total_preview = QLabel("PHP 0.00 allocated")
+        self.item_total_preview = QLabel("PHP 0.00 allocated")
         self.member_list.itemSelectionChanged.connect(self.update_plan_preview)
         self.total_budget.valueChanged.connect(self.update_plan_preview)
 
@@ -592,6 +681,7 @@ class BudgetPlanningTab(WorkflowTab):
         plan_form.addRow("Students in Plan", self.member_list)
         plan_form.addRow("Member Count", self.member_count)
         plan_form.addRow("Derived Semestral Fee", self.fee_preview)
+        plan_form.addRow("Bucket Allocation", self.bucket_total_preview)
 
         plan_group = QGroupBox("Semestral Budget Plan")
         plan_group.setLayout(plan_form)
@@ -600,23 +690,26 @@ class BudgetPlanningTab(WorkflowTab):
         save_plan.clicked.connect(self.save_plan)
         new_plan = QPushButton("New Plan")
         new_plan.clicked.connect(self.clear_plan_form)
-        delete_plan = QPushButton("Delete Plan")
-        delete_plan.clicked.connect(self.delete_current_plan)
+        self.delete_plan_button = QPushButton("Delete Plan")
+        self.delete_plan_button.setEnabled(False)
+        self.delete_plan_button.clicked.connect(self.delete_current_plan)
         plan_buttons = QHBoxLayout()
         plan_buttons.addWidget(save_plan)
         plan_buttons.addWidget(new_plan)
-        plan_buttons.addWidget(delete_plan)
+        plan_buttons.addWidget(self.delete_plan_button)
         plan_buttons.addStretch()
 
         self.bucket_id = QLineEdit()
         self.bucket_id.setReadOnly(True)
         self.bucket_name = QLineEdit()
         self.bucket_amount = make_money_input()
+        self.bucket_amount.valueChanged.connect(lambda: self.update_allocation_previews())
         self.bucket_description = QLineEdit()
         bucket_form = QFormLayout()
         bucket_form.addRow("Bucket ID", self.bucket_id)
         bucket_form.addRow("Name", self.bucket_name)
         bucket_form.addRow("Planned Amount", self.bucket_amount)
+        bucket_form.addRow("Item Allocation", self.item_total_preview)
         bucket_form.addRow("Description", self.bucket_description)
         bucket_group = QGroupBox("Fund Bucket")
         bucket_group.setLayout(bucket_form)
@@ -625,12 +718,13 @@ class BudgetPlanningTab(WorkflowTab):
         save_bucket.clicked.connect(self.save_bucket)
         new_bucket = QPushButton("New Bucket")
         new_bucket.clicked.connect(self.clear_bucket_form)
-        delete_bucket = QPushButton("Delete Bucket")
-        delete_bucket.clicked.connect(self.delete_current_bucket)
+        self.delete_bucket_button = QPushButton("Delete Bucket")
+        self.delete_bucket_button.setEnabled(False)
+        self.delete_bucket_button.clicked.connect(self.delete_current_bucket)
         bucket_buttons = QHBoxLayout()
         bucket_buttons.addWidget(save_bucket)
         bucket_buttons.addWidget(new_bucket)
-        bucket_buttons.addWidget(delete_bucket)
+        bucket_buttons.addWidget(self.delete_bucket_button)
         bucket_buttons.addStretch()
 
         self.item_id = QLineEdit()
@@ -638,6 +732,7 @@ class BudgetPlanningTab(WorkflowTab):
         self.item_name = QLineEdit()
         self.item_type = QLineEdit()
         self.item_amount = make_money_input()
+        self.item_amount.valueChanged.connect(lambda: self.update_allocation_previews())
         self.item_description = QLineEdit()
         item_form = QFormLayout()
         item_form.addRow("Item ID", self.item_id)
@@ -652,23 +747,27 @@ class BudgetPlanningTab(WorkflowTab):
         save_item.clicked.connect(self.save_item)
         new_item = QPushButton("New Item")
         new_item.clicked.connect(self.clear_item_form)
-        delete_item = QPushButton("Delete Item")
-        delete_item.clicked.connect(self.delete_current_item)
+        self.delete_item_button = QPushButton("Delete Item")
+        self.delete_item_button.setEnabled(False)
+        self.delete_item_button.clicked.connect(self.delete_current_item)
         item_buttons = QHBoxLayout()
         item_buttons.addWidget(save_item)
         item_buttons.addWidget(new_item)
-        item_buttons.addWidget(delete_item)
+        item_buttons.addWidget(self.delete_item_button)
         item_buttons.addStretch()
 
         layout = QVBoxLayout()
         layout.setSpacing(16)
         layout.addWidget(QLabel("Build the approved semester plan first, then split it into fund buckets and budget items."))
+        layout.addWidget(make_table_search(self.plan_table, "Search budget plans"))
         layout.addWidget(self.plan_table)
         layout.addWidget(plan_group)
         layout.addLayout(plan_buttons)
+        layout.addWidget(make_table_search(self.bucket_table, "Search fund buckets"))
         layout.addWidget(self.bucket_table)
         layout.addWidget(bucket_group)
         layout.addLayout(bucket_buttons)
+        layout.addWidget(make_table_search(self.item_table, "Search budget items"))
         layout.addWidget(self.item_table)
         layout.addWidget(item_group)
         layout.addLayout(item_buttons)
@@ -681,6 +780,7 @@ class BudgetPlanningTab(WorkflowTab):
             self.plans = list_budget_plans()
             self.buckets = list_fund_buckets()
             self.items = list_budget_items()
+            self.transactions = list_transactions()
         except Exception as exc:
             self.show_error("Budget planning load failed", exc)
             return
@@ -702,6 +802,13 @@ class BudgetPlanningTab(WorkflowTab):
             f"Loaded {len(self.plans)} plan(s), {len(self.buckets)} bucket(s), "
             f"and {len(self.items)} item(s)."
         )
+        self.update_allocation_previews()
+        self.update_delete_buttons()
+
+    def update_delete_buttons(self) -> None:
+        self.delete_plan_button.setEnabled(self.plan_table.selected_record() is not None)
+        self.delete_bucket_button.setEnabled(self.bucket_table.selected_record() is not None)
+        self.delete_item_button.setEnabled(self.item_table.selected_record() is not None)
 
     def populate_member_list(self) -> None:
         selected_ids = set(self.selected_student_ids())
@@ -734,6 +841,46 @@ class BudgetPlanningTab(WorkflowTab):
         self.member_count.setText(f"{count} member(s)")
         fee = self.total_budget.value() / count if count else 0
         self.fee_preview.setText(money(fee))
+        self.update_allocation_previews()
+
+    def update_allocation_previews(self) -> None:
+        if self.current_plan_id:
+            bucket_total = sum(
+                float(bucket.get("planned_amount") or 0)
+                for bucket in self.buckets
+                if bucket.get("plan_id") == self.current_plan_id
+            )
+            plan_budget = self.total_budget.value()
+            self.bucket_total_preview.setText(
+                f"{money(bucket_total)} of {money(plan_budget)}"
+            )
+            if plan_budget and bucket_total > plan_budget:
+                self.bucket_total_preview.setStyleSheet("color: #b42318; font-weight: 600;")
+                self.set_status("Warning: fund buckets exceed the selected plan budget.")
+            else:
+                self.bucket_total_preview.setStyleSheet("")
+        else:
+            self.bucket_total_preview.setText("PHP 0.00 allocated")
+            self.bucket_total_preview.setStyleSheet("")
+
+        if self.current_bucket_id:
+            item_total = sum(
+                float(item.get("planned_amount") or 0)
+                for item in self.items
+                if item.get("bucket_id") == self.current_bucket_id
+            )
+            bucket_budget = self.bucket_amount.value()
+            self.item_total_preview.setText(
+                f"{money(item_total)} of {money(bucket_budget)}"
+            )
+            if bucket_budget and item_total > bucket_budget:
+                self.item_total_preview.setStyleSheet("color: #b42318; font-weight: 600;")
+                self.set_status("Warning: budget items exceed the selected bucket amount.")
+            else:
+                self.item_total_preview.setStyleSheet("")
+        else:
+            self.item_total_preview.setText("PHP 0.00 allocated")
+            self.item_total_preview.setStyleSheet("")
 
     def load_selected_plan(self) -> None:
         row = self.plan_table.selected_record()
@@ -750,6 +897,7 @@ class BudgetPlanningTab(WorkflowTab):
         self.select_student_ids(row.get("student_ids") or [])
         self.clear_bucket_form()
         self.refresh_bucket_table()
+        self.update_allocation_previews()
 
     def clear_plan_form(self) -> None:
         self.current_plan_id = None
@@ -764,11 +912,13 @@ class BudgetPlanningTab(WorkflowTab):
         self.select_student_ids([])
         self.clear_bucket_form()
         self.refresh_bucket_table()
+        self.update_delete_buttons()
         self.set_status("Ready for a new budget plan.")
 
     def save_plan(self) -> None:
         student_ids = self.selected_student_ids()
-        if not self.academic_year.text().strip() or not self.semester.currentText().strip():
+        academic_year = input_text(self.academic_year)
+        if not academic_year or not self.semester.currentText().strip():
             self.show_error("Plan save failed", "Academic year and semester are required.")
             return
         if self.total_budget.value() <= 0:
@@ -777,9 +927,31 @@ class BudgetPlanningTab(WorkflowTab):
         if not student_ids:
             self.show_error("Plan save failed", "Select at least one student for the semester.")
             return
+        if self.current_plan_id:
+            existing = next(
+                (plan for plan in self.plans if plan.get("plan_id") == self.current_plan_id),
+                None,
+            )
+            changed_period = existing and (
+                existing.get("academic_year") != academic_year
+                or existing.get("semester") != self.semester.currentText().strip()
+            )
+            if changed_period:
+                bucket_count = sum(
+                    1 for bucket in self.buckets if bucket.get("plan_id") == self.current_plan_id
+                )
+                transaction_count = sum(
+                    1 for transaction in self.transactions if transaction.get("plan_id") == self.current_plan_id
+                )
+                if (bucket_count or transaction_count) and not self.confirm(
+                    "Change Plan Period",
+                    f"Change the school year or semester for plan #{self.current_plan_id}?\n\n"
+                    f"Impact: {joined_counts([(bucket_count, 'bucket(s)'), (transaction_count, 'transaction(s)')])}.",
+                ):
+                    return
 
         payload = {
-            "academic_year": self.academic_year.text().strip(),
+            "academic_year": academic_year,
             "semester": self.semester.currentText().strip(),
             "total_planned_budget": self.total_budget.value(),
             "member_count": len(student_ids),
@@ -804,13 +976,30 @@ class BudgetPlanningTab(WorkflowTab):
             return
 
         self.refresh()
+        self.refresh_related_tabs()
         self.plan_table.select_record_by_key("plan_id", self.current_plan_id)
 
     def delete_current_plan(self) -> None:
         if not self.current_plan_id:
             self.show_error("Delete failed", "Select a budget plan first.")
             return
-        if not self.confirm("Delete Budget Plan", f"Delete plan #{self.current_plan_id} and its related records?"):
+        bucket_ids = [
+            bucket.get("bucket_id")
+            for bucket in self.buckets
+            if bucket.get("plan_id") == self.current_plan_id
+        ]
+        item_count = sum(
+            1 for item in self.items if item.get("bucket_id") in set(bucket_ids)
+        )
+        transaction_count = sum(
+            1 for transaction in self.transactions if transaction.get("plan_id") == self.current_plan_id
+        )
+        if not self.confirm(
+            "Delete Budget Plan",
+            f"Delete plan #{self.current_plan_id}?\n\n"
+            f"Impact: {joined_counts([(len(bucket_ids), 'bucket(s)'), (item_count, 'item(s)'), (transaction_count, 'transaction(s)')])}.\n"
+            "Plans with transactions cannot be deleted; archive them instead.",
+        ):
             return
         try:
             deleted = delete_budget_plan(self.current_plan_id)
@@ -822,6 +1011,7 @@ class BudgetPlanningTab(WorkflowTab):
             return
         self.current_plan_id = None
         self.refresh()
+        self.refresh_related_tabs()
 
     def refresh_bucket_table(self) -> None:
         if not self.current_plan_id:
@@ -851,6 +1041,7 @@ class BudgetPlanningTab(WorkflowTab):
         self.bucket_description.setText(row.get("description") or "")
         self.clear_item_form()
         self.refresh_item_table()
+        self.update_allocation_previews()
 
     def clear_bucket_form(self) -> None:
         self.current_bucket_id = None
@@ -860,16 +1051,19 @@ class BudgetPlanningTab(WorkflowTab):
         self.bucket_amount.setValue(0)
         self.bucket_description.clear()
         self.clear_item_form()
+        self.update_allocation_previews()
+        self.update_delete_buttons()
 
     def save_bucket(self) -> None:
         if not self.current_plan_id:
             self.show_error("Bucket save failed", "Select a budget plan first.")
             return
-        if not self.bucket_name.text().strip() or self.bucket_amount.value() <= 0:
+        bucket_name = input_text(self.bucket_name)
+        if not bucket_name or self.bucket_amount.value() <= 0:
             self.show_error("Bucket save failed", "Bucket name and planned amount are required.")
             return
         payload = {
-            "bucket_name": self.bucket_name.text().strip(),
+            "bucket_name": bucket_name,
             "planned_amount": self.bucket_amount.value(),
             "description": optional_text(self.bucket_description),
         }
@@ -887,13 +1081,26 @@ class BudgetPlanningTab(WorkflowTab):
             self.show_error("Bucket save failed", exc)
             return
         self.refresh()
+        self.refresh_related_tabs()
         self.bucket_table.select_record_by_key("bucket_id", self.current_bucket_id)
 
     def delete_current_bucket(self) -> None:
         if not self.current_bucket_id:
             self.show_error("Delete failed", "Select a fund bucket first.")
             return
-        if not self.confirm("Delete Fund Bucket", f"Delete bucket #{self.current_bucket_id}?"):
+        child_items = [
+            item for item in self.items if item.get("bucket_id") == self.current_bucket_id
+        ]
+        item_ids = {item.get("budget_item_id") for item in child_items}
+        transaction_count = sum(
+            1 for transaction in self.transactions if transaction.get("budget_item_id") in item_ids
+        )
+        if not self.confirm(
+            "Delete Fund Bucket",
+            f"Delete bucket #{self.current_bucket_id} - {input_text(self.bucket_name) or 'bucket'}?\n\n"
+            f"Impact: {joined_counts([(len(child_items), 'budget item(s)'), (transaction_count, 'transaction(s)')])}.\n"
+            "Buckets with transacted items cannot be deleted.",
+        ):
             return
         try:
             deleted = delete_fund_bucket(self.current_bucket_id)
@@ -905,6 +1112,7 @@ class BudgetPlanningTab(WorkflowTab):
             return
         self.current_bucket_id = None
         self.refresh()
+        self.refresh_related_tabs()
 
     def refresh_item_table(self) -> None:
         if not self.current_bucket_id:
@@ -930,6 +1138,7 @@ class BudgetPlanningTab(WorkflowTab):
         self.item_type.setText(row.get("item_type") or "")
         self.item_amount.setValue(float(row.get("planned_amount") or 0))
         self.item_description.setText(row.get("description") or "")
+        self.update_allocation_previews()
 
     def clear_item_form(self) -> None:
         self.current_item_id = None
@@ -939,16 +1148,19 @@ class BudgetPlanningTab(WorkflowTab):
         self.item_type.clear()
         self.item_amount.setValue(0)
         self.item_description.clear()
+        self.update_allocation_previews()
+        self.update_delete_buttons()
 
     def save_item(self) -> None:
         if not self.current_bucket_id:
             self.show_error("Item save failed", "Select a fund bucket first.")
             return
-        if not self.item_name.text().strip() or self.item_amount.value() <= 0:
+        item_name = input_text(self.item_name)
+        if not item_name or self.item_amount.value() <= 0:
             self.show_error("Item save failed", "Item name and planned amount are required.")
             return
         payload = {
-            "item_name": self.item_name.text().strip(),
+            "item_name": item_name,
             "item_type": optional_text(self.item_type),
             "planned_amount": self.item_amount.value(),
             "description": optional_text(self.item_description),
@@ -967,13 +1179,21 @@ class BudgetPlanningTab(WorkflowTab):
             self.show_error("Item save failed", exc)
             return
         self.refresh()
+        self.refresh_related_tabs()
         self.item_table.select_record_by_key("budget_item_id", self.current_item_id)
 
     def delete_current_item(self) -> None:
         if not self.current_item_id:
             self.show_error("Delete failed", "Select a budget item first.")
             return
-        if not self.confirm("Delete Budget Item", f"Delete item #{self.current_item_id}?"):
+        transaction_count = sum(
+            1 for transaction in self.transactions if transaction.get("budget_item_id") == self.current_item_id
+        )
+        if not self.confirm(
+            "Delete Budget Item",
+            f"Delete item #{self.current_item_id} - {input_text(self.item_name) or 'item'}?\n\n"
+            f"Impact: {joined_counts([(transaction_count, 'transaction(s)')])}.",
+        ):
             return
         try:
             deleted = delete_budget_item(self.current_item_id)
@@ -985,6 +1205,7 @@ class BudgetPlanningTab(WorkflowTab):
             return
         self.current_item_id = None
         self.refresh()
+        self.refresh_related_tabs()
 
 
 class TransactionsTab(WorkflowTab):
@@ -1021,18 +1242,22 @@ class TransactionsTab(WorkflowTab):
         self.payment_student = QComboBox()
         self.payment_amount = make_money_input()
         self.payment_approver = QComboBox()
-        self.payment_approval = make_status_combo(("Pending", "Approved", "Rejected"), editable=True)
-        self.payment_status = make_status_combo(("Active", "Void"), editable=True)
+        self.payment_amount_preview = QLabel("Expected: PHP 0.00")
+        self.payment_approval = make_status_combo(("Pending", "Approved", "Rejected"))
+        self.payment_status = make_status_combo(("Active", "Void"))
         self.payment_date = QLineEdit(now_text())
+        self.payment_date.setInputMask("0000-00-00T00:00;_")
         self.payment_notes = QTextEdit()
         self.payment_notes.setFixedHeight(70)
-        self.payment_plan.currentIndexChanged.connect(self.default_payment_amount)
+        self.payment_plan.currentIndexChanged.connect(self.handle_payment_plan_changed)
+        self.payment_amount.valueChanged.connect(self.update_payment_preview)
 
         payment_form = QFormLayout()
         payment_form.addRow("Transaction ID", self.payment_id)
         payment_form.addRow("Budget Plan", self.payment_plan)
         payment_form.addRow("Student", self.payment_student)
         payment_form.addRow("Amount", self.payment_amount)
+        payment_form.addRow("Plan Fee", self.payment_amount_preview)
         payment_form.addRow("Approver", self.payment_approver)
         payment_form.addRow("Approval", self.payment_approval)
         payment_form.addRow("Status", self.payment_status)
@@ -1055,21 +1280,25 @@ class TransactionsTab(WorkflowTab):
         self.expense_plan = QComboBox()
         self.expense_item = QComboBox()
         self.expense_amount = make_money_input()
+        self.expense_amount_preview = QLabel("Planned: PHP 0.00")
         self.expense_approver = QComboBox()
-        self.expense_approval = make_status_combo(("Pending", "Approved", "Rejected"), editable=True)
-        self.expense_status = make_status_combo(("Active", "Void"), editable=True)
+        self.expense_approval = make_status_combo(("Pending", "Approved", "Rejected"))
+        self.expense_status = make_status_combo(("Active", "Void"))
         self.expense_date = QLineEdit(now_text())
+        self.expense_date.setInputMask("0000-00-00T00:00;_")
         self.expense_receipt = QLineEdit()
         self.expense_notes = QTextEdit()
         self.expense_notes.setFixedHeight(70)
         self.capture_inventory = QCheckBox("Record one inventory item from this purchase")
         self.inventory_name = QLineEdit()
         self.inventory_quantity = make_quantity_input()
-        self.inventory_condition = make_status_combo(("New", "Good", "Needs Repair", "Retired"), editable=True)
-        self.inventory_status = make_status_combo(("Active", "Archived"), editable=True)
+        self.inventory_condition = make_status_combo(("New", "Good", "Needs Repair", "Retired"))
+        self.inventory_status = make_status_combo(("Active", "Archived"))
         self.inventory_date = QLineEdit(today_text())
+        self.inventory_date.setInputMask("0000-00-00;_")
         self.expense_plan.currentIndexChanged.connect(self.refresh_expense_items)
         self.expense_item.currentIndexChanged.connect(self.default_expense_amount)
+        self.expense_amount.valueChanged.connect(self.update_expense_preview)
         self.capture_inventory.stateChanged.connect(self.sync_inventory_fields)
 
         expense_form = QFormLayout()
@@ -1077,6 +1306,7 @@ class TransactionsTab(WorkflowTab):
         expense_form.addRow("Budget Plan", self.expense_plan)
         expense_form.addRow("Budget Item", self.expense_item)
         expense_form.addRow("Amount", self.expense_amount)
+        expense_form.addRow("Budget Item Plan", self.expense_amount_preview)
         expense_form.addRow("Approver", self.expense_approver)
         expense_form.addRow("Approval", self.expense_approval)
         expense_form.addRow("Status", self.expense_status)
@@ -1101,8 +1331,12 @@ class TransactionsTab(WorkflowTab):
         expense_buttons.addWidget(new_expense)
         expense_buttons.addStretch()
 
-        delete_transaction = QPushButton("Delete Selected Transaction")
-        delete_transaction.clicked.connect(self.delete_selected_transaction)
+        self.delete_transaction_button = QPushButton("Delete Selected Transaction")
+        self.delete_transaction_button.setEnabled(False)
+        self.delete_transaction_button.clicked.connect(self.delete_selected_transaction)
+        self.table.itemSelectionChanged.connect(
+            lambda: self.delete_transaction_button.setEnabled(self.table.selected_record() is not None)
+        )
 
         forms = QHBoxLayout()
         forms.addWidget(payment_group)
@@ -1111,8 +1345,9 @@ class TransactionsTab(WorkflowTab):
         layout = QVBoxLayout()
         layout.setSpacing(16)
         layout.addWidget(QLabel("Record student semestral fee payments and approved organization expenses."))
+        layout.addWidget(make_table_search(self.table, "Search transactions"))
         layout.addWidget(self.table)
-        layout.addWidget(delete_transaction)
+        layout.addWidget(self.delete_transaction_button)
         layout.addLayout(forms)
         layout.addLayout(payment_buttons)
         layout.addLayout(expense_buttons)
@@ -1146,14 +1381,12 @@ class TransactionsTab(WorkflowTab):
             lambda row: f"#{row.get('plan_id')} {row.get('academic_year')} {row.get('semester')}",
             "Select plan",
         )
-        set_combo_options(
-            self.payment_student,
-            self.students,
-            "student_id",
-            lambda row: f"{row.get('student_id')} - {row.get('name')}",
-            "Select student",
-        )
-        approvers = [student for student in self.students if student.get("can_approve")]
+        self.populate_payment_students()
+        approvers = [
+            student
+            for student in self.students
+            if student.get("can_approve") and student.get("status") == "Active"
+        ]
         set_combo_options(
             self.payment_approver,
             approvers,
@@ -1176,7 +1409,15 @@ class TransactionsTab(WorkflowTab):
             reverse=True,
         )
         self.table.set_rows(rows)
-        self.set_status(f"Loaded {len(rows)} transaction(s).")
+        warnings = []
+        if not [plan for plan in self.plans if plan.get("status") == "Active"]:
+            warnings.append("No active budget plan.")
+        if not approvers:
+            warnings.append("No active approvers.")
+        self.set_status(
+            f"Loaded {len(rows)} transaction(s)."
+            + (f" Warning: {' '.join(warnings)}" if warnings else "")
+        )
 
     def plan_by_id(self, plan_id: int | None) -> dict | None:
         return next((plan for plan in self.plans if plan.get("plan_id") == plan_id), None)
@@ -1184,10 +1425,48 @@ class TransactionsTab(WorkflowTab):
     def item_by_id(self, item_id: int | None) -> dict | None:
         return next((item for item in self.items if item.get("budget_item_id") == item_id), None)
 
+    def transaction_by_id(self, transaction_id: int | None) -> dict | None:
+        return next(
+            (transaction for transaction in self.transactions if transaction.get("transaction_id") == transaction_id),
+            None,
+        )
+
+    def populate_payment_students(self) -> None:
+        plan = self.plan_by_id(current_combo_value(self.payment_plan))
+        plan_student_ids = set(plan.get("student_ids") or []) if plan else set()
+        rows = [
+            student
+            for student in self.students
+            if student.get("student_id") in plan_student_ids
+        ]
+        set_combo_options(
+            self.payment_student,
+            rows,
+            "student_id",
+            lambda row: f"{row.get('student_id')} - {row.get('name')}",
+            "Select student",
+        )
+        if plan and not rows:
+            self.set_status("Warning: the selected plan has no students.")
+
+    def handle_payment_plan_changed(self) -> None:
+        self.populate_payment_students()
+        self.default_payment_amount()
+
     def default_payment_amount(self) -> None:
         plan = self.plan_by_id(current_combo_value(self.payment_plan))
         if plan:
             self.payment_amount.setValue(float(plan.get("semestral_fee_amount") or 0))
+        self.update_payment_preview()
+
+    def update_payment_preview(self) -> None:
+        plan = self.plan_by_id(current_combo_value(self.payment_plan))
+        expected = float(plan.get("semestral_fee_amount") or 0) if plan else 0
+        self.payment_amount_preview.setText(f"Expected: {money(expected)}")
+        if expected and self.payment_amount.value() != expected:
+            self.payment_amount_preview.setStyleSheet("color: #b42318; font-weight: 600;")
+        else:
+            self.payment_amount_preview.setStyleSheet("")
 
     def refresh_expense_items(self) -> None:
         plan_id = current_combo_value(self.expense_plan)
@@ -1210,6 +1489,16 @@ class TransactionsTab(WorkflowTab):
         item = self.item_by_id(current_combo_value(self.expense_item))
         if item:
             self.expense_amount.setValue(float(item.get("planned_amount") or 0))
+        self.update_expense_preview()
+
+    def update_expense_preview(self) -> None:
+        item = self.item_by_id(current_combo_value(self.expense_item))
+        planned = float(item.get("planned_amount") or 0) if item else 0
+        self.expense_amount_preview.setText(f"Planned: {money(planned)}")
+        if planned and self.expense_amount.value() > planned:
+            self.expense_amount_preview.setStyleSheet("color: #b42318; font-weight: 600;")
+        else:
+            self.expense_amount_preview.setStyleSheet("")
 
     def sync_inventory_fields(self) -> None:
         enabled = self.capture_inventory.isChecked()
@@ -1230,6 +1519,7 @@ class TransactionsTab(WorkflowTab):
         self.payment_approval.setCurrentText("Pending")
         self.payment_status.setCurrentText("Active")
         self.default_payment_amount()
+        self.update_payment_preview()
         self.set_status("Ready for a new payment.")
 
     def clear_expense_form(self) -> None:
@@ -1247,6 +1537,7 @@ class TransactionsTab(WorkflowTab):
         self.inventory_status.setCurrentText("Active")
         self.inventory_date.setText(today_text())
         self.default_expense_amount()
+        self.update_expense_preview()
         self.sync_inventory_fields()
         self.set_status("Ready for a new expense.")
 
@@ -1265,6 +1556,7 @@ class TransactionsTab(WorkflowTab):
             self.payment_status.setCurrentText(row.get("transaction_status") or "Active")
             self.payment_date.setText(row.get("transaction_date") or now_text())
             self.payment_notes.setPlainText(row.get("notes") or "")
+            self.update_payment_preview()
             self.set_status(f"Loaded payment #{self.current_payment_id}.")
         else:
             self.current_expense_id = row.get("transaction_id")
@@ -1281,6 +1573,7 @@ class TransactionsTab(WorkflowTab):
             self.expense_notes.setPlainText(row.get("notes") or "")
             self.capture_inventory.setChecked(False)
             self.sync_inventory_fields()
+            self.update_expense_preview()
             self.set_status(f"Loaded expense #{self.current_expense_id}.")
 
     def save_payment(self) -> None:
@@ -1292,6 +1585,39 @@ class TransactionsTab(WorkflowTab):
         if self.payment_amount.value() <= 0:
             self.show_error("Payment save failed", "Payment amount must be greater than 0.")
             return
+        if self.payment_status.currentText() == "Void" and not self.payment_notes.toPlainText().strip():
+            self.show_error("Payment save failed", "Notes are required when voiding a payment.")
+            return
+        if not self.current_payment_id:
+            duplicate = next(
+                (
+                    transaction
+                    for transaction in self.transactions
+                    if transaction.get("transaction_type") == "PAYMENT"
+                    and transaction.get("plan_id") == plan_id
+                    and transaction.get("student_id") == student_id
+                    and transaction.get("transaction_status") == "Active"
+                ),
+                None,
+            )
+            if duplicate and not self.confirm(
+                "Possible Duplicate Payment",
+                f"This student already has payment #{duplicate.get('transaction_id')} for the selected plan.\n\n"
+                "Record another payment anyway?",
+            ):
+                return
+        else:
+            existing = self.transaction_by_id(self.current_payment_id)
+            changed = existing and (
+                existing.get("plan_id") != plan_id
+                or existing.get("student_id") != student_id
+                or float(existing.get("amount") or 0) != self.payment_amount.value()
+            )
+            if changed and not self.confirm(
+                "Change Payment Ledger Details",
+                f"Change plan, student, or amount for payment #{self.current_payment_id}?",
+            ):
+                return
 
         payload = {
             "plan_id": plan_id,
@@ -1319,6 +1645,7 @@ class TransactionsTab(WorkflowTab):
             return
 
         self.refresh()
+        self.refresh_related_tabs()
         self.table.select_record_by_key("transaction_id", self.current_payment_id)
 
     def save_expense(self) -> None:
@@ -1330,9 +1657,45 @@ class TransactionsTab(WorkflowTab):
         if self.expense_amount.value() <= 0:
             self.show_error("Expense save failed", "Expense amount must be greater than 0.")
             return
-        if self.capture_inventory.isChecked() and not self.inventory_name.text().strip():
+        if self.expense_status.currentText() == "Void" and not self.expense_notes.toPlainText().strip():
+            self.show_error("Expense save failed", "Notes are required when voiding an expense.")
+            return
+        item = self.item_by_id(budget_item_id)
+        if item and self.expense_amount.value() > float(item.get("planned_amount") or 0):
+            self.set_status("Warning: expense amount is above the selected budget item amount.")
+            if not self.confirm(
+                "Expense Above Planned Amount",
+                f"The entered amount exceeds the budget item plan of {money(item.get('planned_amount'))}.\n\n"
+                "Record this expense anyway?",
+            ):
+                return
+        if self.current_expense_id:
+            existing = self.transaction_by_id(self.current_expense_id)
+            changed = existing and (
+                existing.get("plan_id") != plan_id
+                or existing.get("budget_item_id") != budget_item_id
+                or float(existing.get("amount") or 0) != self.expense_amount.value()
+            )
+            if changed and not self.confirm(
+                "Change Expense Ledger Details",
+                f"Change plan, budget item, or amount for expense #{self.current_expense_id}?",
+            ):
+                return
+        if self.capture_inventory.isChecked() and not input_text(self.inventory_name):
             self.show_error("Expense save failed", "Inventory name is required when inventory capture is enabled.")
             return
+        if self.capture_inventory.isChecked() and self.current_expense_id:
+            existing_inventory = [
+                item
+                for item in self.inventory
+                if item.get("transaction_id") == self.current_expense_id
+            ]
+            if existing_inventory and not self.confirm(
+                "Duplicate Inventory Capture",
+                f"Expense #{self.current_expense_id} already has {len(existing_inventory)} inventory item(s).\n\n"
+                "Create another inventory item from this expense?",
+            ):
+                return
 
         payload = {
             "plan_id": plan_id,
@@ -1363,7 +1726,7 @@ class TransactionsTab(WorkflowTab):
                 create_inventory_item(
                     {
                         "transaction_id": transaction_id,
-                        "item_name": self.inventory_name.text().strip(),
+                        "item_name": input_text(self.inventory_name),
                         "quantity": self.inventory_quantity.value(),
                         "item_condition": self.inventory_condition.currentText().strip() or "New",
                         "status": self.inventory_status.currentText().strip() or "Active",
@@ -1377,6 +1740,7 @@ class TransactionsTab(WorkflowTab):
             return
 
         self.refresh()
+        self.refresh_related_tabs()
         self.table.select_record_by_key("transaction_id", self.current_expense_id)
 
     def delete_selected_transaction(self) -> None:
@@ -1385,7 +1749,15 @@ class TransactionsTab(WorkflowTab):
             self.show_error("Delete failed", "Select a transaction first.")
             return
         transaction_id = row.get("transaction_id")
-        if not self.confirm("Delete Transaction", f"Delete transaction #{transaction_id}?"):
+        inventory_count = sum(
+            1 for item in self.inventory if item.get("transaction_id") == transaction_id
+        )
+        if not self.confirm(
+            "Delete Transaction",
+            f"Delete {row.get('transaction_type')} transaction #{transaction_id}?\n\n"
+            f"Impact: {joined_counts([(inventory_count, 'inventory item(s)')])}.\n"
+            "Only pending active transactions can be deleted; use Void for ledger records.",
+        ):
             return
         try:
             deleted = delete_transaction(transaction_id)
@@ -1400,6 +1772,7 @@ class TransactionsTab(WorkflowTab):
         if transaction_id == self.current_expense_id:
             self.clear_expense_form()
         self.refresh()
+        self.refresh_related_tabs()
 
 
 class InventoryTab(WorkflowTab):
@@ -1429,9 +1802,10 @@ class InventoryTab(WorkflowTab):
         self.transaction_combo = QComboBox()
         self.item_name = QLineEdit()
         self.quantity = make_quantity_input()
-        self.condition = make_status_combo(("New", "Good", "Needs Repair", "Retired"), editable=True)
-        self.status_combo = make_status_combo(("Active", "Archived"), editable=True)
+        self.condition = make_status_combo(("New", "Good", "Needs Repair", "Retired"))
+        self.status_combo = make_status_combo(("Active", "Archived"))
         self.date_recorded = QLineEdit(today_text())
+        self.date_recorded.setInputMask("0000-00-00;_")
 
         form = QFormLayout()
         form.addRow("Inventory ID", self.inventory_id)
@@ -1448,17 +1822,22 @@ class InventoryTab(WorkflowTab):
         save_button.clicked.connect(self.save_inventory)
         new_button = QPushButton("New")
         new_button.clicked.connect(self.clear_form)
-        delete_button = QPushButton("Delete Selected")
-        delete_button.clicked.connect(self.delete_selected_inventory)
+        self.delete_button = QPushButton("Delete Selected")
+        self.delete_button.setEnabled(False)
+        self.delete_button.clicked.connect(self.delete_selected_inventory)
+        self.table.itemSelectionChanged.connect(
+            lambda: self.delete_button.setEnabled(self.table.selected_record() is not None)
+        )
         buttons = QHBoxLayout()
         buttons.addWidget(save_button)
         buttons.addWidget(new_button)
-        buttons.addWidget(delete_button)
+        buttons.addWidget(self.delete_button)
         buttons.addStretch()
 
         layout = QVBoxLayout()
         layout.setSpacing(16)
         layout.addWidget(QLabel("Inventory items are physical assets connected to expense transactions."))
+        layout.addWidget(make_table_search(self.table, "Search inventory"))
         layout.addWidget(self.table)
         layout.addWidget(group)
         layout.addLayout(buttons)
@@ -1523,12 +1902,13 @@ class InventoryTab(WorkflowTab):
         if not transaction_id:
             self.show_error("Inventory save failed", "Select an expense transaction.")
             return
-        if not self.item_name.text().strip():
+        item_name = input_text(self.item_name)
+        if not item_name:
             self.show_error("Inventory save failed", "Item name is required.")
             return
         payload = {
             "transaction_id": transaction_id,
-            "item_name": self.item_name.text().strip(),
+            "item_name": item_name,
             "quantity": self.quantity.value(),
             "item_condition": self.condition.currentText().strip() or "Good",
             "status": self.status_combo.currentText().strip() or "Active",
@@ -1548,6 +1928,7 @@ class InventoryTab(WorkflowTab):
             self.show_error("Inventory save failed", exc)
             return
         self.refresh()
+        self.refresh_related_tabs()
         self.table.select_record_by_key("inventory_item_id", self.current_inventory_id)
 
     def delete_selected_inventory(self) -> None:
@@ -1556,7 +1937,21 @@ class InventoryTab(WorkflowTab):
             self.show_error("Delete failed", "Select an inventory item first.")
             return
         inventory_id = row.get("inventory_item_id")
-        if not self.confirm("Delete Inventory Item", f"Delete inventory item #{inventory_id}?"):
+        transaction = next(
+            (
+                transaction
+                for transaction in self.transactions
+                if transaction.get("transaction_id") == row.get("transaction_id")
+            ),
+            None,
+        )
+        approval = transaction.get("approval_status") if transaction else "Unknown"
+        if not self.confirm(
+            "Delete Inventory Item",
+            f"Delete inventory item #{inventory_id} - {row.get('item_name') or 'item'}?\n\n"
+            f"Linked expense approval: {approval}.\n"
+            "Inventory tied to decisioned expenses cannot be deleted; archive it instead.",
+        ):
             return
         try:
             deleted = delete_inventory_item(inventory_id)
@@ -1568,6 +1963,7 @@ class InventoryTab(WorkflowTab):
             return
         self.clear_form()
         self.refresh()
+        self.refresh_related_tabs()
 
 
 class MainWindow(QMainWindow):

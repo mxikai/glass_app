@@ -68,7 +68,10 @@ def update_plan_route(plan_id: int):
 
 @bp.delete("/plans/<int:plan_id>")
 def delete_plan_route(plan_id: int):
-    deleted = delete_budget_plan(plan_id)
+    try:
+        deleted = delete_budget_plan(plan_id)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
     if not deleted:
         return jsonify({"error": "Plan not found"}), 404
     return jsonify({"deleted": True})
@@ -115,7 +118,10 @@ def update_bucket_route(bucket_id: int):
 
 @bp.delete("/buckets/<int:bucket_id>")
 def delete_bucket_route(bucket_id: int):
-    deleted = delete_fund_bucket(bucket_id)
+    try:
+        deleted = delete_fund_bucket(bucket_id)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
     if not deleted:
         return jsonify({"error": "Bucket not found"}), 404
     return jsonify({"deleted": True})
@@ -162,7 +168,10 @@ def update_item_route(item_id: int):
 
 @bp.delete("/items/<int:item_id>")
 def delete_item_route(item_id: int):
-    deleted = delete_budget_item(item_id)
+    try:
+        deleted = delete_budget_item(item_id)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
     if not deleted:
         return jsonify({"error": "Item not found"}), 404
     return jsonify({"deleted": True})

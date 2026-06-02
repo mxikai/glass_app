@@ -56,7 +56,10 @@ def update_transaction_route(transaction_id: int):
 
 @bp.delete("/<int:transaction_id>")
 def delete_transaction_route(transaction_id: int):
-    deleted = delete_transaction(transaction_id)
+    try:
+        deleted = delete_transaction(transaction_id)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
     if not deleted:
         return jsonify({"error": "Transaction not found"}), 404
     return jsonify({"deleted": True})

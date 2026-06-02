@@ -56,7 +56,10 @@ def update_inventory_route(item_id: int):
 
 @bp.delete("/<int:item_id>")
 def delete_inventory_route(item_id: int):
-    deleted = delete_inventory_item(item_id)
+    try:
+        deleted = delete_inventory_item(item_id)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
     if not deleted:
         return jsonify({"error": "Inventory item not found"}), 404
     return jsonify({"deleted": True})

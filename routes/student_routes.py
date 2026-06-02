@@ -56,7 +56,10 @@ def update_student_route(student_id: str):
 
 @bp.delete("/<student_id>")
 def delete_student_route(student_id: str):
-    deleted = delete_student(student_id)
+    try:
+        deleted = delete_student(student_id)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
     if not deleted:
         return jsonify({"error": "Student not found"}), 404
     return jsonify({"deleted": True})
