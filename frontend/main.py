@@ -1,23 +1,28 @@
 import sys
 import os
+
+frontend_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.abspath(os.path.join(frontend_dir, '..'))
+
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+if frontend_dir not in sys.path:
+    sys.path.insert(0, frontend_dir)
+    
+from components.sidebar import Sidebar
+from views.dashboard import DashboardView
+from views.students import StudentsView
+from views.budgets import BudgetPlanView
+from views.other_views import (
+    TransactionsView, InventoryView, ReportsView
+)
+
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget,
     QHBoxLayout, QStackedWidget
 )
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QIcon
-
-# Add project root to path
-sys.path.insert(0, os.path.dirname(__file__))
-
-from components.sidebar import Sidebar
-from views.dashboard import DashboardView
-from views.students import StudentsView
-from views.other_views import (
-    BudgetPlanView,
-    TransactionsView, InventoryView, ReportsView
-)
-
 
 class MainWindow(QMainWindow):
     def __init__(self):
