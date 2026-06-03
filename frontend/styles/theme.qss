@@ -1,0 +1,444 @@
+/* ========== GLASS App Theme ========== */
+
+/* --- App Background --- */
+QMainWindow, QWidget#centralWidget {
+    background-color: #EEF0F8;
+}
+
+/* --- Sidebar --- */
+QWidget#sidebar {
+    background-color: #6C5CE7;
+    border-radius: 0px;
+    min-width: 70px;
+    max-width: 70px;
+}
+
+QPushButton#navBtn {
+    background-color: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 22px;
+    padding: 14px 0px;
+    border-radius: 12px;
+    margin: 4px 8px;
+}
+
+QPushButton#navBtn:hover {
+    background-color: rgba(255, 255, 255, 0.15);
+    color: white;
+}
+
+QPushButton#navBtn:checked {
+    background-color: rgba(255, 255, 255, 0.22);
+    color: white;
+}
+
+/* --- Main Content Area --- */
+QWidget#contentArea {
+    background-color: #EEF0F8;
+}
+
+/* --- Page Title --- */
+QLabel#pageSubtitle {
+    color: #9B9BB0;
+    font-size: 12px;
+    font-family: 'Segoe UI';
+}
+
+QLabel#pageTitle {
+    color: #1A1A3E;
+    font-size: 24px;
+    font-weight: 700;
+    font-family: 'Segoe UI';
+}
+
+/* --- Summary Cards --- */
+QWidget#statCard {
+    background-color: white;
+    border-radius: 18px;
+    border: none;
+}
+
+QLabel#cardValue {
+    color: #1A1A3E;
+    font-size: 22px;
+    font-weight: 700;
+    font-family: 'Segoe UI';
+}
+
+QLabel#cardLabel {
+    color: #9B9BB0;
+    font-size: 12px;
+    font-family: 'Segoe UI';
+}
+
+QLabel#cardIcon {
+    font-size: 20px;
+}
+
+/* --- Purple Overview Card --- */
+QWidget#overviewCard {
+    background-color: #6C5CE7;
+    border-radius: 22px;
+}
+
+QLabel#overviewTitle {
+    color: rgba(255,255,255,0.7);
+    font-size: 13px;
+    font-family: 'Segoe UI';
+}
+
+QLabel#overviewValue {
+    color: white;
+    font-size: 20px;
+    font-weight: 700;
+    font-family: 'Segoe UI';
+}
+
+QLabel#overviewSub {
+    color: rgba(255,255,255,0.5);
+    font-size: 11px;
+    font-family: 'Segoe UI';
+}
+
+/* --- Pink Activity Card --- */
+QWidget#activityCard {
+    background-color: #FD79A8;
+    border-radius: 22px;
+}
+
+QLabel#activityTitle {
+    color: white;
+    font-size: 15px;
+    font-weight: 600;
+    font-family: 'Segoe UI';
+}
+
+QLabel#activityValue {
+    color: white;
+    font-size: 22px;
+    font-weight: 700;
+    font-family: 'Segoe UI';
+}
+
+/* --- Budget Bucket Progress Cards --- */
+QWidget#bucketCard {
+    background-color: white;
+    border-radius: 18px;
+}
+
+QLabel#bucketTitle {
+    color: #1A1A3E;
+    font-size: 13px;
+    font-weight: 600;
+    font-family: 'Segoe UI';
+}
+
+QLabel#bucketSub {
+    color: #9B9BB0;
+    font-size: 11px;
+    font-family: 'Segoe UI';
+}
+
+QProgressBar#bucketProgress {
+    background-color: #EEF0F8;
+    border-radius: 4px;
+    border: none;
+    height: 7px;
+    text-align: right;
+}
+
+QProgressBar#bucketProgress::chunk {
+    border-radius: 4px;
+    background-color: #6C5CE7;
+}
+
+QProgressBar#bucketProgressPink::chunk {
+    border-radius: 4px;
+    background-color: #FD79A8;
+}
+
+QProgressBar#bucketProgressGreen::chunk {
+    border-radius: 4px;
+    background-color: #00B894;
+}
+
+/* --- Right Panel --- */
+QWidget#rightPanel {
+    background-color: white;
+    border-radius: 22px;
+}
+
+QLabel#panelTitle {
+    color: #1A1A3E;
+    font-size: 15px;
+    font-weight: 700;
+    font-family: 'Segoe UI';
+}
+
+QPushButton#viewAllBtn {
+    background: transparent;
+    border: none;
+    color: #6C5CE7;
+    font-size: 12px;
+    font-family: 'Segoe UI';
+}
+
+QPushButton#viewAllBtn:hover {
+    color: #5A4BD1;
+}
+
+/* --- Student Row in Panel --- */
+QWidget#studentRow {
+    background: transparent;
+    border-radius: 10px;
+    padding: 4px;
+}
+
+QWidget#studentRow:hover {
+    background-color: #F5F3FF;
+}
+
+QLabel#studentName {
+    color: #1A1A3E;
+    font-size: 13px;
+    font-weight: 600;
+    font-family: 'Segoe UI';
+}
+
+QLabel#studentDetail {
+    color: #9B9BB0;
+    font-size: 11px;
+    font-family: 'Segoe UI';
+}
+
+/* --- Badge / Status Pill --- */
+QLabel#badgePaid {
+    background-color: #E8F5E9;
+    color: #2E7D32;
+    border-radius: 8px;
+    padding: 2px 8px;
+    font-size: 11px;
+    font-family: 'Segoe UI';
+}
+
+QLabel#badgePending {
+    background-color: #FFF3E0;
+    color: #E65100;
+    border-radius: 8px;
+    padding: 2px 8px;
+    font-size: 11px;
+    font-family: 'Segoe UI';
+}
+
+QLabel#badgeApproved {
+    background-color: #EDE7F6;
+    color: #6C5CE7;
+    border-radius: 8px;
+    padding: 2px 8px;
+    font-size: 11px;
+    font-family: 'Segoe UI';
+}
+
+/* --- Search Bar --- */
+QLineEdit#searchBar {
+    background-color: white;
+    border: none;
+    border-radius: 12px;
+    padding: 8px 16px;
+    font-size: 13px;
+    font-family: 'Segoe UI';
+    color: #1A1A3E;
+}
+
+QLineEdit#searchBar:focus {
+    border: 1.5px solid #6C5CE7;
+}
+
+/* --- Section Header --- */
+QLabel#sectionHeader {
+    color: #1A1A3E;
+    font-size: 16px;
+    font-weight: 700;
+    font-family: 'Segoe UI';
+}
+
+/* --- Avatar Circle --- */
+QLabel#avatar {
+    border-radius: 18px;
+    background-color: #EDE7F6;
+    color: #6C5CE7;
+    font-size: 12px;
+    font-weight: 700;
+    font-family: 'Segoe UI';
+    qproperty-alignment: AlignCenter;
+}
+
+/* --- Scrollbar --- */
+QScrollArea {
+    border: none;
+    background: transparent;
+}
+
+QScrollBar:vertical {
+    border: none;
+    background: #EEF0F8;
+    width: 6px;
+    border-radius: 3px;
+}
+
+QScrollBar::handle:vertical {
+    background: #C5BFEE;
+    border-radius: 3px;
+    min-height: 20px;
+}
+
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0px;
+}
+
+/* --- Tab / Page Switcher --- */
+QPushButton#tabActive {
+    background-color: #6C5CE7;
+    color: white;
+    border-radius: 10px;
+    border: none;
+    font-size: 12px;
+    font-weight: 600;
+    font-family: 'Segoe UI';
+    padding: 6px 16px;
+}
+
+QPushButton#tabInactive {
+    background-color: transparent;
+    color: #9B9BB0;
+    border-radius: 10px;
+    border: none;
+    font-size: 12px;
+    font-family: 'Segoe UI';
+    padding: 6px 16px;
+}
+
+QPushButton#tabInactive:hover {
+    background-color: #EDE7F6;
+    color: #6C5CE7;
+}
+
+/* --- Action Button --- */
+QPushButton#primaryBtn {
+    background-color: #6C5CE7;
+    color: white;
+    border-radius: 12px;
+    border: none;
+    font-size: 13px;
+    font-weight: 600;
+    font-family: 'Segoe UI';
+    padding: 10px 20px;
+}
+
+QPushButton#primaryBtn:hover {
+    background-color: #5A4BD1;
+}
+
+QPushButton#primaryBtn:pressed {
+    background-color: #4A3BBF;
+}
+
+/* =========================================
+   Students Panel
+   ========================================= */
+
+QFrame#profilePanel {
+    background-color: white;
+    border-radius: 24px;
+}
+
+QLabel#profileAvatar {
+    background-color: #EDE7F6;
+    color: #6C5CE7;
+    border-radius: 35px; /* Makes it a perfect circle */
+    font-size: 24px;
+    font-weight: 700;
+    font-family: 'Segoe UI';
+}
+
+QLabel#profileName {
+    color: #1A1A3E;
+    font-size: 18px;
+    font-weight: 700;
+    font-family: 'Segoe UI';
+    margin-top: 8px;
+}
+
+/* --- Clean Modern Table --- */
+QTableWidget#modernTable {
+    background-color: white;
+    border-radius: 16px;
+    border: none;
+    padding: 10px;
+}
+
+QTableWidget#modernTable::item {
+    border-bottom: 1px solid #EEF0F8;
+    padding: 4px;
+    color: #1A1A3E;
+}
+
+QTableWidget#modernTable::item:selected {
+    background-color: #F5F3FF;
+    color: #6C5CE7;
+    border-radius: 8px;
+}
+
+QHeaderView::section {
+    background-color: transparent;
+    border: none;
+    font-weight: 700;
+    color: #9B9BB0;
+    border-bottom: 2px solid #EEF0F8;
+    padding-bottom: 8px;
+    text-align: left;
+}
+
+/* --- Form Inputs --- */
+QLineEdit#formInput, QComboBox#formInput {
+    background-color: #F5F6FA;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 13px;
+    color: #1A1A3E;
+}
+
+QLineEdit#formInput:focus, QComboBox#formInput:focus {
+    border: 1.5px solid #6C5CE7;
+}
+
+/* --- Secondary Buttons --- */
+QPushButton#secondaryBtn {
+    background-color: #EEF0F8;
+    color: #9B9BB0;
+    border-radius: 12px;
+    border: none;
+    font-weight: 600;
+    padding: 10px;
+}
+
+QPushButton#secondaryBtn:hover {
+    background-color: #E4E6F1;
+    color: #1A1A3E;
+}
+
+QPushButton#dangerBtn {
+    background-color: #FCE4EC;
+    color: #FD79A8;
+    border-radius: 12px;
+    border: none;
+    font-weight: 600;
+    padding: 10px;
+}
+
+QPushButton#dangerBtn:hover {
+    background-color: #FD79A8;
+    color: white;
+}
