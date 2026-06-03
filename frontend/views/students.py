@@ -74,10 +74,10 @@ class StudentsView(QWidget):
         self.profile_name.setObjectName("profileName")
         self.profile_name.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
-        avatar_layout.addWidget(self.avatar_circle)
-        avatar_layout.addWidget(self.profile_name)
+        avatar_layout.addWidget(self.avatar_circle, alignment=Qt.AlignmentFlag.AlignHCenter)
+        avatar_layout.addWidget(self.profile_name, alignment=Qt.AlignmentFlag.AlignHCenter)
         panel_layout.addLayout(avatar_layout)
-        
+    
         # form fields
         form_layout = QFormLayout()
         form_layout.setVerticalSpacing(12)
