@@ -3,12 +3,12 @@ import os
 
 #THIS ALL NEEDS REWORKING 
 
-backend_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'backend'))
-if backend_dir not in sys.path:
-    sys.path.insert(0, backend_dir)
-    
-from services.budget_service import list_budget_plans
-from services.transaction_service import list_transactions
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+from backend.services.budget_service import list_budget_plans
+from backend.services.transaction_service import list_transactions
 
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,

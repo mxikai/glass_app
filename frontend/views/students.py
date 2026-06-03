@@ -1,11 +1,11 @@
 import sys
 import os
 
-backend_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'backend'))
-if backend_dir not in sys.path:
-    sys.path.insert(0, backend_dir)
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
 
-from services.student_service import list_students, create_student, update_student, delete_student
+from backend.services.student_service import list_students, create_student, update_student, delete_student
 
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, 
