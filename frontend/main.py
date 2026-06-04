@@ -13,8 +13,9 @@ from components.sidebar import Sidebar
 from views.dashboard import DashboardView
 from views.students import StudentsView
 from views.budgets import BudgetPlanView
+from views.transactions import TransactionsView
 from views.other_views import (
-    TransactionsView, InventoryView, ReportsView
+    InventoryView, ReportsView
 )
 
 from PyQt6.QtWidgets import (
