@@ -57,17 +57,14 @@ class BudgetPlanView(QWidget):
         self.tabs.setObjectName("modernTabs")
         self.tabs.currentChanged.connect(self.on_tab_changed)
 
-        # 1. Plans Table
         self.table_plans = self._create_table(["ID", "Year", "Sem", "Budget", "Fee", "Status"])
         self.table_plans.itemSelectionChanged.connect(self.on_plan_select)
         self.tabs.addTab(self.table_plans, "1. Budget Plans")
 
-        # 2. Buckets Table
         self.table_buckets = self._create_table(["ID", "Bucket Name", "Amount", "Description"])
         self.table_buckets.itemSelectionChanged.connect(self.on_bucket_select)
         self.tabs.addTab(self.table_buckets, "2. Fund Buckets")
 
-        # 3. Items Table
         self.table_items = self._create_table(["ID", "Item Name", "Type", "Amount"])
         self.table_items.itemSelectionChanged.connect(self.on_item_select)
         self.tabs.addTab(self.table_items, "3. Budget Items")
@@ -90,7 +87,6 @@ class BudgetPlanView(QWidget):
         self.form_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         panel_layout.addWidget(self.form_title)
 
-        # Use QStackedWidget to swap forms based on the active tab
         self.form_stack = QStackedWidget()
         
         self.setup_plan_form()
@@ -171,15 +167,19 @@ class BudgetPlanView(QWidget):
         layout = QFormLayout(widget)
         layout.setVerticalSpacing(12)
         
+        # --- NEW DROPDOWN ---
+        self.bucket_plan_select = QComboBox()
+        
         self.bucket_name = QLineEdit()
         self.bucket_amount = QDoubleSpinBox()
         self.bucket_amount.setRange(0, 9999999)
         self.bucket_amount.setPrefix("₱ ")
         self.bucket_desc = QLineEdit()
 
-        for w in [self.bucket_name, self.bucket_amount, self.bucket_desc]:
+        for w in [self.bucket_plan_select, self.bucket_name, self.bucket_amount, self.bucket_desc]:
             w.setObjectName("formInput")
 
+        layout.addRow("Budget Plan", self.bucket_plan_select)
         layout.addRow("Bucket Name", self.bucket_name)
         layout.addRow("Allocation", self.bucket_amount)
         layout.addRow("Description", self.bucket_desc)
@@ -190,15 +190,19 @@ class BudgetPlanView(QWidget):
         layout = QFormLayout(widget)
         layout.setVerticalSpacing(12)
         
+        # --- NEW DROPDOWN ---
+        self.item_bucket_select = QComboBox()
+        
         self.item_name = QLineEdit()
         self.item_type = QLineEdit()
         self.item_amount = QDoubleSpinBox()
         self.item_amount.setRange(0, 9999999)
         self.item_amount.setPrefix("₱ ")
 
-        for w in [self.item_name, self.item_type, self.item_amount]:
+        for w in [self.item_bucket_select, self.item_name, self.item_type, self.item_amount]:
             w.setObjectName("formInput")
 
+        layout.addRow("Fund Bucket", self.item_bucket_select)
         layout.addRow("Item Name", self.item_name)
         layout.addRow("Type", self.item_type)
         layout.addRow("Amount", self.item_amount)
@@ -211,11 +215,40 @@ class BudgetPlanView(QWidget):
             self.buckets_data = list_fund_buckets()
             self.items_data = list_budget_items()
             
+            self.populate_dropdowns() # Populate the new comboboxes
+            
             self.refresh_plans_table()
             self.refresh_buckets_table()
             self.refresh_items_table()
         except Exception as e:
             QMessageBox.warning(self, "Error", f"Failed to load data: {e}")
+
+    def populate_dropdowns(self):
+        """Fills the new dropdown menus with data from the database."""
+        curr_plan = self.bucket_plan_select.currentData()
+        curr_bucket = self.item_bucket_select.currentData()
+
+        # Fill Budget Plan Dropdown
+        self.bucket_plan_select.clear()
+        for p in self.plans_data:
+            if isinstance(p, dict):
+                label = f"Plan {p.get('plan_id')} ({p.get('academic_year')} Sem {p.get('semester')})"
+                self.bucket_plan_select.addItem(label, p.get("plan_id"))
+
+        # Fill Fund Bucket Dropdown
+        self.item_bucket_select.clear()
+        for b in self.buckets_data:
+            if isinstance(b, dict):
+                label = f"{b.get('bucket_name')} (ID: {b.get('bucket_id')})"
+                self.item_bucket_select.addItem(label, b.get("bucket_id"))
+
+        # Restore previous selections if they existed
+        if curr_plan:
+            idx = self.bucket_plan_select.findData(curr_plan)
+            if idx >= 0: self.bucket_plan_select.setCurrentIndex(idx)
+        if curr_bucket:
+            idx = self.item_bucket_select.findData(curr_bucket)
+            if idx >= 0: self.item_bucket_select.setCurrentIndex(idx)
 
     def refresh_plans_table(self):
         self.table_plans.setRowCount(0)
@@ -254,21 +287,29 @@ class BudgetPlanView(QWidget):
 
     # --- UI Interactions ---
     def on_tab_changed(self, index):
-        # SAFETY NET: If the UI is still building, do nothing and don't crash!
-        if not hasattr(self, 'form_stack'):
-            return 
+        if not hasattr(self, 'form_stack'): return 
             
         self.form_stack.setCurrentIndex(index)
         titles = ["Plan Details", "Bucket Details", "Item Details"]
         self.form_title.setText(titles[index])
-        self.clear_current_form()
+        
+        # Only clear the form if we aren't actively editing a record from the table
+        if index == 0 and not self.current_plan_id: self.clear_current_form()
+        elif index == 1 and not self.current_bucket_id: self.clear_current_form()
+        elif index == 2 and not self.current_item_id: self.clear_current_form()
 
     def on_plan_select(self):
         rows = self.table_plans.selectedItems()
         if not rows: return
         
         self.current_plan_id = int(self.table_plans.item(rows[0].row(), 0).text())
-        plan = next((p for p in self.plans_data if p["plan_id"] == self.current_plan_id), None)
+        
+        plan = None
+        for p in self.plans_data:
+            if isinstance(p, dict) and str(p.get("plan_id")) == str(self.current_plan_id):
+                plan = p
+                break
+                
         if plan:
             self.plan_year.setText(plan.get("academic_year", ""))
             self.plan_sem.setCurrentText(plan.get("semester", "1st"))
@@ -276,7 +317,10 @@ class BudgetPlanView(QWidget):
             self.plan_members.setValue(int(plan.get("member_count") or 1))
             self.plan_status.setCurrentText(plan.get("status", "Active"))
             
-        # Clear children selection and refresh their tables
+            # Sync the Dropdown: Automatically select this plan in the Bucket form!
+            idx = self.bucket_plan_select.findData(self.current_plan_id)
+            if idx >= 0: self.bucket_plan_select.setCurrentIndex(idx)
+            
         self.current_bucket_id = None
         self.current_item_id = None
         self.refresh_buckets_table()
@@ -287,8 +331,21 @@ class BudgetPlanView(QWidget):
         if not rows: return
         
         self.current_bucket_id = int(self.table_buckets.item(rows[0].row(), 0).text())
-        bucket = next((b for b in self.buckets_data if b["bucket_id"] == self.current_bucket_id), None)
+        
+        bucket = None
+        for b in self.buckets_data:
+            if isinstance(b, dict) and str(b.get("bucket_id")) == str(self.current_bucket_id):
+                bucket = b
+                break
+                
         if bucket:
+            # Sync Dropdowns
+            plan_idx = self.bucket_plan_select.findData(bucket.get("plan_id"))
+            if plan_idx >= 0: self.bucket_plan_select.setCurrentIndex(plan_idx)
+            
+            item_idx = self.item_bucket_select.findData(self.current_bucket_id)
+            if item_idx >= 0: self.item_bucket_select.setCurrentIndex(item_idx)
+
             self.bucket_name.setText(bucket.get("bucket_name", ""))
             self.bucket_amount.setValue(float(bucket.get("planned_amount") or 0))
             self.bucket_desc.setText(bucket.get("description", ""))
@@ -301,8 +358,18 @@ class BudgetPlanView(QWidget):
         if not rows: return
         
         self.current_item_id = int(self.table_items.item(rows[0].row(), 0).text())
-        item = next((i for i in self.items_data if i["budget_item_id"] == self.current_item_id), None)
+        
+        item = None
+        for i in self.items_data:
+            if isinstance(i, dict) and str(i.get("budget_item_id")) == str(self.current_item_id):
+                item = i
+                break
+                
         if item:
+            # Sync Dropdown
+            bucket_idx = self.item_bucket_select.findData(item.get("bucket_id"))
+            if bucket_idx >= 0: self.item_bucket_select.setCurrentIndex(bucket_idx)
+
             self.item_name.setText(item.get("item_name", ""))
             self.item_type.setText(item.get("item_type", ""))
             self.item_amount.setValue(float(item.get("planned_amount") or 0))
@@ -311,7 +378,7 @@ class BudgetPlanView(QWidget):
     def save_current_form(self):
         idx = self.tabs.currentIndex()
         try:
-            if idx == 0:  # Save Plan
+            if idx == 0:  
                 if not self.plan_year.text(): raise ValueError("Academic Year is required.")
                 data = {
                     "academic_year": self.plan_year.text().strip(),
@@ -323,10 +390,13 @@ class BudgetPlanView(QWidget):
                 if self.current_plan_id: update_budget_plan(self.current_plan_id, data)
                 else: create_budget_plan(data)
                 
-            elif idx == 1:  # Save Bucket
-                if not self.current_plan_id: raise ValueError("Select a Budget Plan first.")
+            elif idx == 1:  
+                # Now we grab the ID safely from your new Dropdown!
+                selected_plan_id = self.bucket_plan_select.currentData()
+                if not selected_plan_id: raise ValueError("Please select a Budget Plan from the dropdown.")
+
                 data = {
-                    "plan_id": self.current_plan_id,
+                    "plan_id": selected_plan_id,
                     "bucket_name": self.bucket_name.text().strip(),
                     "planned_amount": self.bucket_amount.value(),
                     "description": self.bucket_desc.text().strip()
@@ -334,10 +404,13 @@ class BudgetPlanView(QWidget):
                 if self.current_bucket_id: update_fund_bucket(self.current_bucket_id, data)
                 else: create_fund_bucket(data)
                 
-            elif idx == 2:  # Save Item
-                if not self.current_bucket_id: raise ValueError("Select a Fund Bucket first.")
+            elif idx == 2:  
+                # Grab the ID safely from your new Dropdown!
+                selected_bucket_id = self.item_bucket_select.currentData()
+                if not selected_bucket_id: raise ValueError("Please select a Fund Bucket from the dropdown.")
+
                 data = {
-                    "bucket_id": self.current_bucket_id,
+                    "bucket_id": selected_bucket_id,
                     "item_name": self.item_name.text().strip(),
                     "item_type": self.item_type.text().strip(),
                     "planned_amount": self.item_amount.value()
@@ -361,12 +434,14 @@ class BudgetPlanView(QWidget):
             self.table_plans.clearSelection()
         elif idx == 1:
             self.current_bucket_id = None
+            self.bucket_plan_select.setCurrentIndex(-1) # Visually blanks the dropdown
             self.bucket_name.clear()
             self.bucket_amount.setValue(0)
             self.bucket_desc.clear()
             self.table_buckets.clearSelection()
         elif idx == 2:
             self.current_item_id = None
+            self.item_bucket_select.setCurrentIndex(-1) # Visually blanks the dropdown
             self.item_name.clear()
             self.item_type.clear()
             self.item_amount.setValue(0)
