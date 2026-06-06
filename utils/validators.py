@@ -18,6 +18,7 @@ TRANSACTION_STATUSES = ("Active", "Void")
 TRANSACTION_TYPES = ("PAYMENT", "EXPENSE")
 INVENTORY_STATUSES = ("Active", "Archived")
 INVENTORY_CONDITIONS = ("New", "Good", "Needs Repair", "Retired")
+INVENTORY_SOURCE_TYPES = ("Purchase", "Legacy")
 
 
 def is_blank(value) -> bool:
