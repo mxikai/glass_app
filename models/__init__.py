@@ -1,5 +1,6 @@
 from models.budget_item_model import BudgetItem
 from models.budget_plan_model import BudgetPlan, budget_plan_students
+from models.expense_line_item_model import ExpenseLineItem
 from models.fund_bucket_model import FundBucket
 from models.inventory_model import InventoryItem
 from models.student_model import Student
@@ -11,6 +12,7 @@ __all__ = [
     "FundBucket",
     "BudgetItem",
     "Transaction",
+    "ExpenseLineItem",
     "InventoryItem",
     "budget_plan_students",
 ]
