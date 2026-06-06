@@ -20,3 +20,5 @@ The SQLite database is created automatically at database/glass.db on first run.
 - Budget items: /budget/items
 - Transactions: /transactions
 - Inventory: /inventory
+- Dashboard summary: /dashboard/summary
+- Reports: /reports/<report-type> and /reports/<report-type>/pdf
