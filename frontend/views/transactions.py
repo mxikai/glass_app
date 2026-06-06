@@ -33,10 +33,11 @@ class TransactionsView(QWidget):
 
         self.setup_ui()
         self.load_all_data()
-        
-        def showEvent(self, event):
-            super().showEvent(event)
-            self.load_all_data()
+
+    def showEvent(self, event):
+        """Refreshes the data every time the tab is clicked!"""
+        super().showEvent(event)
+        self.load_all_data()
 
     def setup_ui(self):
         main_layout = QHBoxLayout(self)
@@ -64,7 +65,7 @@ class TransactionsView(QWidget):
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.table.setShowGrid(False) 
         self.table.verticalHeader().setVisible(False)
-        self.table.setMinimumWidth(400) # Prevents the table from disappearing horizontally!
+        self.table.setMinimumWidth(400) 
         self.table.itemSelectionChanged.connect(self.on_table_select)
         
         left_col.addWidget(self.table)
@@ -74,18 +75,15 @@ class TransactionsView(QWidget):
         # ==========================================
         self.right_panel = QFrame()
         self.right_panel.setObjectName("profilePanel")
-        self.right_panel.setFixedWidth(380) # Bumped up slightly to fit the scrollbar
+        self.right_panel.setFixedWidth(380) 
         
-        # Outer layout for the panel frame
         panel_outer_layout = QVBoxLayout(self.right_panel)
         panel_outer_layout.setContentsMargins(0, 0, 0, 0)
         
-        # The Scroll Area
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         scroll_area.setStyleSheet("QScrollArea { border: none; background: transparent; } QWidget#scrollContainer { background: transparent; }")
         
-        # The actual container that goes INSIDE the scroll area
         scroll_container = QWidget()
         scroll_container.setObjectName("scrollContainer")
         
@@ -111,11 +109,9 @@ class TransactionsView(QWidget):
         self.input_amount.setRange(0, 9999999)
         self.input_amount.setPrefix("₱ ")
         
-        # Dynamic Fields: Payment
         self.lbl_student = QLabel("Student (Payer)")
         self.input_student = QComboBox()
         
-        # Dynamic Fields: Expense
         self.lbl_item = QLabel("Budget Item")
         self.input_item = QComboBox()
         
@@ -126,7 +122,6 @@ class TransactionsView(QWidget):
         self.input_receipt = QLineEdit()
         self.input_receipt.setPlaceholderText("File path...")
 
-        # Universal Statuses
         self.input_status = QComboBox()
         self.input_status.addItems(["Active", "Void"])
         
@@ -197,11 +192,9 @@ class TransactionsView(QWidget):
         panel_layout.addWidget(self.btn_save)
         panel_layout.addLayout(btn_row)
 
-        # Pack the scroll container into the scroll area, and the area into the frame
         scroll_area.setWidget(scroll_container)
         panel_outer_layout.addWidget(scroll_area)
 
-        # Assemble the split screen
         main_layout.addLayout(left_col, stretch=1)
         main_layout.addWidget(self.right_panel)
 
@@ -255,10 +248,21 @@ class TransactionsView(QWidget):
                 label = f"{s.get('name')} ({s.get('student_id')})"
                 self.input_student.addItem(label, s.get("student_id"))
                 
-                # BULLETPROOF CHECK: Explicitly verify the backend data
-                can_approve = s.get("can_approve")
-                if can_approve in [True, 1, "1", "true", "True", "yes", "Yes"]:
+                # --- THE ABSOLUTE BULLETPROOF BOOLEAN CHECK ---
+                raw_val = s.get("can_approve")
+                is_approver = False
+                
+                # Forces Python to strictly analyze exactly what the database handed it
+                if isinstance(raw_val, bool):
+                    is_approver = raw_val
+                elif isinstance(raw_val, int):
+                    is_approver = (raw_val == 1)
+                elif isinstance(raw_val, str):
+                    is_approver = raw_val.strip().lower() in ['true', '1', 'yes', 't', 'y']
+
+                if is_approver:
                     self.input_approver.addItem(label, s.get("student_id"))
+                # ----------------------------------------------
 
         self.input_item.clear()
         for i in self.items_data:
