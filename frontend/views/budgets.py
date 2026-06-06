@@ -11,6 +11,7 @@ from backend.services.budget_service import (
     list_fund_buckets, create_fund_bucket, update_fund_bucket, delete_fund_bucket,
     list_budget_items, create_budget_item, update_budget_item, delete_budget_item
 )
+from backend.services.student_service import list_students 
 # ----------------------------------
 
 from PyQt6.QtWidgets import (
@@ -30,9 +31,13 @@ class BudgetPlanView(QWidget):
         self.current_bucket_id = None
         self.current_item_id = None
         
+        # This invisible list holds the historical OR synced students
+        self.current_plan_student_ids = []
+        
         self.plans_data = []
         self.buckets_data = []
         self.items_data = []
+        self.students_data = []
 
         self.setup_ui()
 
@@ -79,7 +84,7 @@ class BudgetPlanView(QWidget):
         # ==========================================
         self.right_panel = QFrame()
         self.right_panel.setObjectName("profilePanel")
-        self.right_panel.setFixedWidth(320)
+        self.right_panel.setFixedWidth(340) # Keep it wide enough for the sync button
         
         panel_layout = QVBoxLayout(self.right_panel)
         panel_layout.setContentsMargins(24, 32, 24, 32)
@@ -147,9 +152,22 @@ class BudgetPlanView(QWidget):
         self.plan_budget.setRange(0, 9999999)
         self.plan_budget.setPrefix("₱ ")
         
+        # --- THE SYNC ROW ---
         self.plan_members = QSpinBox()
-        self.plan_members.setRange(1, 5000)
+        self.plan_members.setRange(0, 5000)
+        self.plan_members.setReadOnly(True)
+        self.plan_members.setToolTip("Shows the exact number of students historically saved to this plan.")
         
+        self.btn_sync_students = QPushButton("↻ Sync Active Roster")
+        self.btn_sync_students.setObjectName("secondaryBtn")
+        self.btn_sync_students.setStyleSheet("font-size: 11px; padding: 6px;")
+        self.btn_sync_students.clicked.connect(self.sync_active_students)
+        
+        member_layout = QHBoxLayout()
+        member_layout.addWidget(self.plan_members)
+        member_layout.addWidget(self.btn_sync_students)
+        # --------------------
+
         self.plan_status = QComboBox()
         self.plan_status.addItems(["Active", "Archived"])
 
@@ -159,8 +177,9 @@ class BudgetPlanView(QWidget):
         layout.addRow("Acad Year", self.plan_year)
         layout.addRow("Semester", self.plan_sem)
         layout.addRow("Total Budget", self.plan_budget)
-        layout.addRow("Members", self.plan_members)
+        layout.addRow("Students", member_layout) # Added our custom horizontal layout here
         layout.addRow("Status", self.plan_status)
+        
         self.form_stack.addWidget(widget)
 
     def setup_bucket_form(self):
@@ -191,11 +210,8 @@ class BudgetPlanView(QWidget):
         
         self.item_bucket_select = QComboBox()
         self.item_name = QLineEdit()
-        
-        # FIX: Now explicitly mapped to the PDF's Data Dictionary ENUM options!
         self.item_type = QComboBox()
         self.item_type.addItems(["Activity", "Supply", "Service", "Equipment", "Inventory"])
-        
         self.item_amount = QDoubleSpinBox()
         self.item_amount.setRange(0, 9999999)
         self.item_amount.setPrefix("₱ ")
@@ -209,11 +225,13 @@ class BudgetPlanView(QWidget):
         layout.addRow("Amount", self.item_amount)
         self.form_stack.addWidget(widget)
 
+    # --- CORE DATA METHODS ---
     def load_all_data(self):
         try:
             self.plans_data = list_budget_plans()
             self.buckets_data = list_fund_buckets()
             self.items_data = list_budget_items()
+            self.students_data = list_students() 
             
             self.populate_dropdowns() 
             self.refresh_plans_table()
@@ -245,6 +263,22 @@ class BudgetPlanView(QWidget):
             idx = self.item_bucket_select.findData(curr_bucket)
             if idx >= 0: self.item_bucket_select.setCurrentIndex(idx)
 
+    # --- THE MAGIC SYNC METHOD ---
+    def sync_active_students(self, silent=False):
+        """Grabs the current active database roster and locks it into this plan's memory."""
+        active_ids = [
+            s.get("student_id") 
+            for s in self.students_data 
+            if isinstance(s, dict) and s.get("status") == "Active"
+        ]
+        
+        self.current_plan_student_ids = active_ids
+        self.plan_members.setValue(len(active_ids))
+        
+        if not silent:
+            QMessageBox.information(self, "Roster Synced", f"Successfully pulled {len(active_ids)} active students into this plan.")
+
+    # --- REFRESH TABLES ---
     def refresh_plans_table(self):
         self.table_plans.setRowCount(0)
         for i, p in enumerate(self.plans_data):
@@ -258,7 +292,6 @@ class BudgetPlanView(QWidget):
 
     def refresh_buckets_table(self):
         self.table_buckets.setRowCount(0)
-        # FIX: If no plan is selected, safely display ALL buckets instead of showing a blank table
         filtered = self.buckets_data
         if self.current_plan_id:
             filtered = [b for b in self.buckets_data if str(b.get("plan_id")) == str(self.current_plan_id)]
@@ -272,7 +305,6 @@ class BudgetPlanView(QWidget):
 
     def refresh_items_table(self):
         self.table_items.setRowCount(0)
-        # FIX: If no bucket is selected, safely display ALL items
         filtered = self.items_data
         if self.current_bucket_id:
             filtered = [it for it in self.items_data if str(it.get("bucket_id")) == str(self.current_bucket_id)]
@@ -311,8 +343,12 @@ class BudgetPlanView(QWidget):
             self.plan_year.setText(plan.get("academic_year", ""))
             self.plan_sem.setCurrentText(plan.get("semester", "1st"))
             self.plan_budget.setValue(float(plan.get("total_planned_budget") or 0))
-            self.plan_members.setValue(int(plan.get("member_count") or 1))
             self.plan_status.setCurrentText(plan.get("status", "Active"))
+            
+            # --- Load Historical Snapshot ---
+            self.current_plan_student_ids = plan.get("student_ids") or []
+            self.plan_members.setValue(int(plan.get("member_count") or 0))
+            # --------------------------------
             
             idx = self.bucket_plan_select.findData(self.current_plan_id)
             if idx >= 0: self.bucket_plan_select.setCurrentIndex(idx)
@@ -373,13 +409,21 @@ class BudgetPlanView(QWidget):
         try:
             if idx == 0:  
                 if not self.plan_year.text(): raise ValueError("Academic Year is required.")
+                
+                # Verify we actually have students mapped in memory
+                if not self.current_plan_student_ids:
+                    QMessageBox.warning(self, "Validation Error", "There are no students assigned to this plan. Try clicking Sync Active Roster.")
+                    return
+
                 data = {
                     "academic_year": self.plan_year.text().strip(),
                     "semester": self.plan_sem.currentText(),
                     "total_planned_budget": self.plan_budget.value(),
-                    "member_count": self.plan_members.value(),
-                    "status": self.plan_status.currentText()
+                    "member_count": len(self.current_plan_student_ids), 
+                    "status": self.plan_status.currentText(),
+                    "student_ids": self.current_plan_student_ids # Matches the exact historical/synced memory
                 }
+                
                 if self.current_plan_id: update_budget_plan(self.current_plan_id, data)
                 else: create_budget_plan(data)
                 
@@ -403,7 +447,7 @@ class BudgetPlanView(QWidget):
                 data = {
                     "bucket_id": selected_bucket_id,
                     "item_name": self.item_name.text().strip(),
-                    "item_type": self.item_type.currentText(), # Safely grabs from the new Dropdown!
+                    "item_type": self.item_type.currentText(), 
                     "planned_amount": self.item_amount.value()
                 }
                 if self.current_item_id: update_budget_item(self.current_item_id, data)
@@ -411,6 +455,7 @@ class BudgetPlanView(QWidget):
 
             self.load_all_data()
             self.clear_current_form()
+            
         except Exception as e:
             QMessageBox.warning(self, "Validation Error", str(e))
 
@@ -421,7 +466,10 @@ class BudgetPlanView(QWidget):
             self.plan_year.clear()
             self.plan_sem.setCurrentIndex(0)
             self.plan_budget.setValue(0)
-            self.plan_members.setValue(1)
+            
+            # --- STARTING A NEW PLAN? Automatically sync today's active students instantly! ---
+            self.sync_active_students(silent=True)
+            
             self.table_plans.clearSelection()
         elif idx == 1:
             self.current_bucket_id = None

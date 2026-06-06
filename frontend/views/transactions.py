@@ -214,8 +214,12 @@ class TransactionsView(QWidget):
         
         self.lbl_item.setVisible(not is_payment)
         self.input_item.setVisible(not is_payment)
-        self.lbl_approver.setVisible(not is_payment)
-        self.input_approver.setVisible(not is_payment)
+        
+        # --- THE FIX: ALWAYS VISIBLE NOW ---
+        self.lbl_approver.setVisible(True)
+        self.input_approver.setVisible(True)
+        # -----------------------------------
+
         self.lbl_receipt.setVisible(not is_payment)
         self.input_receipt.setVisible(not is_payment)
         
@@ -248,11 +252,9 @@ class TransactionsView(QWidget):
                 label = f"{s.get('name')} ({s.get('student_id')})"
                 self.input_student.addItem(label, s.get("student_id"))
                 
-                # --- THE ABSOLUTE BULLETPROOF BOOLEAN CHECK ---
                 raw_val = s.get("can_approve")
                 is_approver = False
                 
-                # Forces Python to strictly analyze exactly what the database handed it
                 if isinstance(raw_val, bool):
                     is_approver = raw_val
                 elif isinstance(raw_val, int):
@@ -262,7 +264,6 @@ class TransactionsView(QWidget):
 
                 if is_approver:
                     self.input_approver.addItem(label, s.get("student_id"))
-                # ----------------------------------------------
 
         self.input_item.clear()
         for i in self.items_data:
@@ -349,12 +350,14 @@ class TransactionsView(QWidget):
             QMessageBox.warning(self, "Validation Error", "You must select a Budget Plan!")
             return
             
+        # --- THE FIX: Approver is explicitly bundled for ALL transaction types! ---
         data = {
             "plan_id": plan_id,
             "transaction_type": tx_type,
             "amount": self.input_amount.value(),
             "transaction_status": self.input_status.currentText(),
             "approval_status": self.input_approval.currentText(),
+            "approver_id": self.input_approver.currentData(), 
             "notes": self.input_notes.text().strip()
         }
         
@@ -362,12 +365,13 @@ class TransactionsView(QWidget):
             data["student_id"] = self.input_student.currentData()
         else: 
             data["budget_item_id"] = self.input_item.currentData()
-            data["approver_id"] = self.input_approver.currentData()
             data["receipt_path"] = self.input_receipt.text().strip()
             
-            if data["approval_status"] == "Approved" and not data.get("approver_id"):
-                QMessageBox.warning(self, "Validation Error", "You must select an Officer to approve this transaction!")
-                return
+        # Validate that an approver exists if the status is "Approved"
+        if data["approval_status"] == "Approved" and not data.get("approver_id"):
+            QMessageBox.warning(self, "Validation Error", "You must select an Officer to approve this transaction!")
+            return
+        # -------------------------------------------------------------------------
         
         try:
             if self.current_transaction_id:
