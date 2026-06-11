@@ -8,15 +8,15 @@ from utils.db import Base
 
 
 class Student(Base):
-    __tablename__ = "students"
+    __tablename__ = "Student"
 
-    student_id = Column(String(32), primary_key=True)
-    name = Column(String(120), nullable=False)
-    program = Column(String(120))
-    year_level = Column(Integer)
-    role_title = Column(String(80))
-    can_approve = Column(Boolean, default=False)
-    status = Column(String(20), default="Active")
+    student_id = Column("StudentID", String(32), primary_key=True)
+    name = Column("Name", String(120), nullable=False)
+    program = Column("Program", String(120))
+    year_level = Column("YearLevel", Integer)
+    role_title = Column("RoleTitle", String(80))
+    can_approve = Column("CanApprove", Boolean, default=False)
+    status = Column("Status", String(20), default="Active")
 
     budget_plans = relationship(
         "BudgetPlan",

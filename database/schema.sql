@@ -1,97 +1,102 @@
 -- Reference schema generated from SQLAlchemy models (not used at runtime).
+-- Physical names follow the base data dictionary while app/service payloads
+-- continue to use snake_case keys.
 
-CREATE TABLE students (
-    student_id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    program TEXT,
-    year_level INTEGER,
-    role_title TEXT,
-    can_approve INTEGER DEFAULT 0,
-    status TEXT DEFAULT 'Active'
+CREATE TABLE Student (
+    StudentID VARCHAR(32) NOT NULL,
+    Name VARCHAR(120) NOT NULL,
+    Program VARCHAR(120),
+    YearLevel INTEGER,
+    RoleTitle VARCHAR(80),
+    CanApprove BOOLEAN DEFAULT 0,
+    Status VARCHAR(20) DEFAULT 'Active',
+    PRIMARY KEY (StudentID)
 );
 
-CREATE TABLE budget_plans (
-    plan_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    academic_year TEXT NOT NULL,
-    semester TEXT NOT NULL,
-    total_planned_budget REAL NOT NULL,
-    member_count INTEGER NOT NULL,
-    semestral_fee_amount REAL NOT NULL,
-    approval_status TEXT DEFAULT 'Pending',
-    approved_date TEXT,
-    status TEXT DEFAULT 'Active'
+CREATE TABLE BudgetPlan (
+    PlanID INTEGER PRIMARY KEY AUTOINCREMENT,
+    AcademicYear VARCHAR(20) NOT NULL,
+    Semester VARCHAR(20) NOT NULL,
+    TotalPlannedBudget NUMERIC(12, 2) NOT NULL,
+    MemberCount INTEGER NOT NULL,
+    SemestralFeeAmount NUMERIC(12, 2) NOT NULL,
+    ApprovalStatus VARCHAR(20) DEFAULT 'Pending',
+    ApprovedDate DATE,
+    Status VARCHAR(20) DEFAULT 'Active'
 );
 
-CREATE TABLE budget_plan_students (
-    plan_id INTEGER NOT NULL,
-    student_id TEXT NOT NULL,
-    PRIMARY KEY (plan_id, student_id),
-    FOREIGN KEY (plan_id) REFERENCES budget_plans(plan_id),
-    FOREIGN KEY (student_id) REFERENCES students(student_id)
+CREATE TABLE BudgetPlanStudent (
+    PlanID INTEGER NOT NULL,
+    StudentID VARCHAR(32) NOT NULL,
+    DateIncluded DATE NOT NULL DEFAULT CURRENT_DATE,
+    FeeStatus VARCHAR(10) NOT NULL DEFAULT 'Pending',
+    PRIMARY KEY (PlanID, StudentID),
+    FOREIGN KEY (PlanID) REFERENCES BudgetPlan(PlanID),
+    FOREIGN KEY (StudentID) REFERENCES Student(StudentID)
 );
 
-CREATE TABLE fund_buckets (
-    bucket_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    plan_id INTEGER NOT NULL,
-    bucket_name TEXT NOT NULL,
-    planned_amount REAL NOT NULL,
-    description TEXT,
-    FOREIGN KEY (plan_id) REFERENCES budget_plans(plan_id)
+CREATE TABLE FundBucket (
+    BucketID INTEGER PRIMARY KEY AUTOINCREMENT,
+    PlanID INTEGER NOT NULL,
+    BucketName VARCHAR(120) NOT NULL,
+    PlannedAmount NUMERIC(12, 2) NOT NULL,
+    Description VARCHAR(255),
+    FOREIGN KEY (PlanID) REFERENCES BudgetPlan(PlanID)
 );
 
-CREATE TABLE budget_items (
-    budget_item_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    bucket_id INTEGER NOT NULL,
-    item_name TEXT NOT NULL,
-    item_type TEXT,
-    planned_amount REAL NOT NULL,
-    description TEXT,
-    FOREIGN KEY (bucket_id) REFERENCES fund_buckets(bucket_id)
+CREATE TABLE BudgetItem (
+    BudgetItemID INTEGER PRIMARY KEY AUTOINCREMENT,
+    BucketID INTEGER NOT NULL,
+    ItemName VARCHAR(120) NOT NULL,
+    ItemType VARCHAR(50),
+    PlannedAmount NUMERIC(12, 2) NOT NULL,
+    Description VARCHAR(255),
+    FOREIGN KEY (BucketID) REFERENCES FundBucket(BucketID)
 );
 
-CREATE TABLE transactions (
-    transaction_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    plan_id INTEGER NOT NULL,
-    student_id TEXT,
-    approver_id TEXT,
-    budget_item_id INTEGER,
-    amount REAL NOT NULL,
-    transaction_type TEXT NOT NULL,
-    transaction_status TEXT DEFAULT 'Active',
-    approval_status TEXT DEFAULT 'Pending',
-    transaction_date TEXT,
-    notes TEXT,
-    receipt_path TEXT,
-    amount_override_reason TEXT,
-    current_hash TEXT,
-    previous_hash TEXT,
-    FOREIGN KEY (plan_id) REFERENCES budget_plans(plan_id),
-    FOREIGN KEY (student_id) REFERENCES students(student_id),
-    FOREIGN KEY (approver_id) REFERENCES students(student_id),
-    FOREIGN KEY (budget_item_id) REFERENCES budget_items(budget_item_id)
+CREATE TABLE TransactionRecord (
+    TransactionID INTEGER PRIMARY KEY AUTOINCREMENT,
+    PlanID INTEGER NOT NULL,
+    StudentID VARCHAR(32),
+    BudgetItemID INTEGER,
+    ApprovedByStudentID VARCHAR(32),
+    Amount NUMERIC(12, 2) NOT NULL,
+    TransactionType VARCHAR(20) NOT NULL,
+    TransactionStatus VARCHAR(20) DEFAULT 'Active',
+    ApprovalStatus VARCHAR(20) DEFAULT 'Pending',
+    TransactionDate DATETIME,
+    Notes TEXT,
+    ReceiptPath VARCHAR(255),
+    AmountOverrideReason TEXT,
+    CurrentHash VARCHAR(64),
+    PreviousHash VARCHAR(64),
+    FOREIGN KEY (PlanID) REFERENCES BudgetPlan(PlanID),
+    FOREIGN KEY (StudentID) REFERENCES Student(StudentID),
+    FOREIGN KEY (BudgetItemID) REFERENCES BudgetItem(BudgetItemID),
+    FOREIGN KEY (ApprovedByStudentID) REFERENCES Student(StudentID)
 );
 
-CREATE TABLE expense_line_items (
-    line_item_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    transaction_id INTEGER NOT NULL,
-    item_name TEXT NOT NULL,
-    quantity INTEGER NOT NULL DEFAULT 1,
-    unit_cost REAL NOT NULL,
-    FOREIGN KEY (transaction_id) REFERENCES transactions(transaction_id)
+CREATE TABLE ExpenseLineItem (
+    LineItemID INTEGER PRIMARY KEY AUTOINCREMENT,
+    TransactionID INTEGER NOT NULL,
+    ItemName VARCHAR(120) NOT NULL,
+    Quantity INTEGER NOT NULL DEFAULT 1,
+    UnitCost NUMERIC(12, 2) NOT NULL,
+    FOREIGN KEY (TransactionID) REFERENCES TransactionRecord(TransactionID)
 );
 
-CREATE TABLE inventory_items (
-    inventory_item_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    transaction_id INTEGER,
-    expense_line_item_id INTEGER,
-    item_name TEXT NOT NULL,
-    quantity INTEGER DEFAULT 1,
-    unit_cost REAL,
-    item_condition TEXT,
-    source_type TEXT DEFAULT 'Purchase',
-    source_note TEXT,
-    status TEXT DEFAULT 'Active',
-    date_recorded TEXT,
-    FOREIGN KEY (transaction_id) REFERENCES transactions(transaction_id),
-    FOREIGN KEY (expense_line_item_id) REFERENCES expense_line_items(line_item_id)
+CREATE TABLE InventoryItem (
+    InventoryItemID INTEGER PRIMARY KEY AUTOINCREMENT,
+    PurchaseTransactionID INTEGER,
+    ExpenseLineItemID INTEGER,
+    ItemName VARCHAR(120) NOT NULL,
+    Quantity INTEGER DEFAULT 1,
+    UnitCost NUMERIC(12, 2),
+    ItemCondition VARCHAR(50),
+    SourceType VARCHAR(20) DEFAULT 'Purchase',
+    SourceNote TEXT,
+    Status VARCHAR(20) DEFAULT 'Active',
+    DateRecorded DATE,
+    FOREIGN KEY (PurchaseTransactionID) REFERENCES TransactionRecord(TransactionID),
+    FOREIGN KEY (ExpenseLineItemID) REFERENCES ExpenseLineItem(LineItemID)
 );
