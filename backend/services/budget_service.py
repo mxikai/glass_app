@@ -2,13 +2,20 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from backend.models.budget_item_model import BudgetItem
-from backend.models.budget_plan_model import BudgetPlan
-from backend.models.fund_bucket_model import FundBucket
-from backend.models.student_model import Student
-from backend.models.transaction_model import Transaction
-from backend.utils.db import session_scope
-from backend.utils.validators import (
+from models.budget_item_model import BudgetItem
+from models.budget_plan_model import BudgetPlan
+from models.fund_bucket_model import FundBucket
+from models.student_model import Student
+from models.transaction_model import Transaction
+from services.budget_cap_service import (
+    ensure_bucket_allocation_within_plan,
+    ensure_bucket_covers_items,
+    ensure_item_allocation_within_bucket,
+    ensure_item_covers_reserved_expenses,
+    ensure_plan_covers_buckets,
+)
+from utils.db import session_scope
+from utils.validators import (
     APPROVAL_STATUSES,
     PLAN_STATUSES,
     SEMESTERS,
@@ -208,6 +215,8 @@ def update_budget_plan(plan_id: int, data: dict) -> dict | None:
             students = _load_students(session, student_ids)
             plan.students = students
 
+        ensure_plan_covers_buckets(session, plan_id, payload["total_planned_budget"])
+
         for field in [
             "academic_year",
             "semester",
@@ -265,6 +274,12 @@ def create_fund_bucket(data: dict) -> dict:
         plan = session.get(BudgetPlan, plan_id)
         if not plan:
             raise ValueError("Invalid plan_id")
+        ensure_bucket_allocation_within_plan(
+            session,
+            plan_id,
+            payload["planned_amount"],
+            plan_amount=plan.total_planned_budget,
+        )
 
         bucket = FundBucket(
             plan_id=plan_id,
@@ -284,6 +299,14 @@ def update_fund_bucket(bucket_id: int, data: dict) -> dict | None:
             return None
 
         payload = _bucket_payload(data, current=bucket.to_dict())
+        ensure_bucket_allocation_within_plan(
+            session,
+            bucket.plan_id,
+            payload["planned_amount"],
+            plan_amount=bucket.budget_plan.total_planned_budget,
+            exclude_bucket_id=bucket.bucket_id,
+        )
+        ensure_bucket_covers_items(session, bucket.bucket_id, payload["planned_amount"])
         for field in ["bucket_name", "planned_amount", "description"]:
             setattr(bucket, field, payload[field])
 
@@ -335,6 +358,12 @@ def create_budget_item(data: dict) -> dict:
         bucket = session.get(FundBucket, bucket_id)
         if not bucket:
             raise ValueError("Invalid bucket_id")
+        ensure_item_allocation_within_bucket(
+            session,
+            bucket_id,
+            payload["planned_amount"],
+            bucket_amount=bucket.planned_amount,
+        )
 
         item = BudgetItem(
             bucket_id=bucket_id,
@@ -355,6 +384,18 @@ def update_budget_item(item_id: int, data: dict) -> dict | None:
             return None
 
         payload = _item_payload(data, current=item.to_dict())
+        ensure_item_allocation_within_bucket(
+            session,
+            item.bucket_id,
+            payload["planned_amount"],
+            bucket_amount=item.fund_bucket.planned_amount,
+            exclude_item_id=item.budget_item_id,
+        )
+        ensure_item_covers_reserved_expenses(
+            session,
+            item.budget_item_id,
+            payload["planned_amount"],
+        )
         for field in ["item_name", "item_type", "planned_amount", "description"]:
             setattr(item, field, payload[field])
 

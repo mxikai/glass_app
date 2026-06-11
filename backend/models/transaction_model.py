@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from datetime import datetime
+from decimal import Decimal
 
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.orm import relationship
 
-from backend.utils.db import Base
+from utils.db import Base
 
 
 class Transaction(Base):
@@ -23,6 +24,7 @@ class Transaction(Base):
     transaction_date = Column(DateTime, default=datetime.utcnow)
     notes = Column(Text)
     receipt_path = Column(String(255))
+    amount_override_reason = Column(Text)
     current_hash = Column(String(64))
     previous_hash = Column(String(64))
 
@@ -31,6 +33,25 @@ class Transaction(Base):
     approver = relationship("Student", foreign_keys=[approver_id], back_populates="approved_transactions")
     budget_item = relationship("BudgetItem", back_populates="transactions")
     inventory_items = relationship("InventoryItem", back_populates="transaction", cascade="all, delete-orphan")
+    expense_line_items = relationship(
+        "ExpenseLineItem",
+        back_populates="transaction",
+        cascade="all, delete-orphan",
+        order_by="ExpenseLineItem.line_item_id",
+    )
+
+    @property
+    def computed_line_total(self) -> Decimal:
+        return sum(
+            (line_item.line_total for line_item in self.expense_line_items),
+            Decimal("0"),
+        )
+
+    @property
+    def amount_delta(self) -> Decimal:
+        if self.transaction_type != "EXPENSE":
+            return Decimal("0")
+        return Decimal(str(self.amount or 0)) - self.computed_line_total
 
     def to_dict(self) -> dict:
         return {
@@ -46,6 +67,10 @@ class Transaction(Base):
             "transaction_date": self.transaction_date.isoformat() if self.transaction_date else None,
             "notes": self.notes,
             "receipt_path": self.receipt_path,
+            "amount_override_reason": self.amount_override_reason,
             "current_hash": self.current_hash,
             "previous_hash": self.previous_hash,
+            "line_items": [line_item.to_dict() for line_item in self.expense_line_items],
+            "computed_line_total": float(self.computed_line_total),
+            "amount_delta": float(self.amount_delta),
         }

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from flask import Blueprint, jsonify, request
 
-from backend.services.budget_service import (
+from services.budget_service import (
     create_budget_item,
     create_budget_plan,
     create_fund_bucket,

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from backend.models.student_model import Student
-from backend.utils.db import session_scope
-from backend.utils.validators import (
+from models.student_model import Student
+from utils.db import session_scope
+from utils.validators import (
     STUDENT_STATUSES,
     choice_value,
     int_value,

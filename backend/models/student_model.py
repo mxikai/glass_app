@@ -3,8 +3,8 @@ from __future__ import annotations
 from sqlalchemy import Boolean, Column, Integer, String
 from sqlalchemy.orm import relationship
 
-from backend.models.budget_plan_model import budget_plan_students
-from backend.utils.db import Base
+from models.budget_plan_model import budget_plan_students
+from utils.db import Base
 
 
 class Student(Base):

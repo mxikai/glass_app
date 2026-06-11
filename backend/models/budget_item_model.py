@@ -3,7 +3,7 @@ from __future__ import annotations
 from sqlalchemy import Column, ForeignKey, Integer, Numeric, String
 from sqlalchemy.orm import relationship
 
-from backend.utils.db import Base
+from utils.db import Base
 
 
 class BudgetItem(Base):

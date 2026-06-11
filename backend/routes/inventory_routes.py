@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from flask import Blueprint, jsonify, request
 
-from backend.services.inventory_service import (
+from services.inventory_service import (
     create_inventory_item,
     delete_inventory_item,
     get_inventory_item,

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from flask import Blueprint, jsonify, request
 
-from backend.services.transaction_service import (
+from services.transaction_service import (
     create_transaction,
     delete_transaction,
     get_transaction,

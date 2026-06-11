@@ -3,7 +3,7 @@ from __future__ import annotations
 from sqlalchemy import Column, Date, ForeignKey, Integer, Numeric, String, Table
 from sqlalchemy.orm import relationship
 
-from backend.utils.db import Base
+from utils.db import Base
 
 budget_plan_students = Table(
     "budget_plan_students",

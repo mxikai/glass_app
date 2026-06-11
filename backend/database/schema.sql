@@ -62,6 +62,7 @@ CREATE TABLE transactions (
     transaction_date TEXT,
     notes TEXT,
     receipt_path TEXT,
+    amount_override_reason TEXT,
     current_hash TEXT,
     previous_hash TEXT,
     FOREIGN KEY (plan_id) REFERENCES budget_plans(plan_id),
@@ -70,13 +71,27 @@ CREATE TABLE transactions (
     FOREIGN KEY (budget_item_id) REFERENCES budget_items(budget_item_id)
 );
 
-CREATE TABLE inventory_items (
-    inventory_item_id INTEGER PRIMARY KEY AUTOINCREMENT,
+CREATE TABLE expense_line_items (
+    line_item_id INTEGER PRIMARY KEY AUTOINCREMENT,
     transaction_id INTEGER NOT NULL,
     item_name TEXT NOT NULL,
+    quantity INTEGER NOT NULL DEFAULT 1,
+    unit_cost REAL NOT NULL,
+    FOREIGN KEY (transaction_id) REFERENCES transactions(transaction_id)
+);
+
+CREATE TABLE inventory_items (
+    inventory_item_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    transaction_id INTEGER,
+    expense_line_item_id INTEGER,
+    item_name TEXT NOT NULL,
     quantity INTEGER DEFAULT 1,
+    unit_cost REAL,
     item_condition TEXT,
+    source_type TEXT DEFAULT 'Purchase',
+    source_note TEXT,
     status TEXT DEFAULT 'Active',
     date_recorded TEXT,
-    FOREIGN KEY (transaction_id) REFERENCES transactions(transaction_id)
+    FOREIGN KEY (transaction_id) REFERENCES transactions(transaction_id),
+    FOREIGN KEY (expense_line_item_id) REFERENCES expense_line_items(line_item_id)
 );

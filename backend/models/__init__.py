@@ -1,9 +1,10 @@
-from backend.models.budget_item_model import BudgetItem
-from backend.models.budget_plan_model import BudgetPlan, budget_plan_students
-from backend.models.fund_bucket_model import FundBucket
-from backend.models.inventory_model import InventoryItem
-from backend.models.student_model import Student
-from backend.models.transaction_model import Transaction
+from models.budget_item_model import BudgetItem
+from models.budget_plan_model import BudgetPlan, budget_plan_students
+from models.expense_line_item_model import ExpenseLineItem
+from models.fund_bucket_model import FundBucket
+from models.inventory_model import InventoryItem
+from models.student_model import Student
+from models.transaction_model import Transaction
 
 __all__ = [
     "Student",
@@ -11,6 +12,7 @@ __all__ = [
     "FundBucket",
     "BudgetItem",
     "Transaction",
+    "ExpenseLineItem",
     "InventoryItem",
     "budget_plan_students",
 ]
