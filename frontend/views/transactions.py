@@ -7,35 +7,86 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 from backend.services.transaction_service import list_transactions, create_transaction, update_transaction, delete_transaction
-from backend.services.budget_service import list_budget_plans, list_budget_items
+from backend.services.budget_service import list_budget_plans, list_budget_items, list_fund_buckets
 from backend.services.student_service import list_students
-from backend.services.inventory_service import create_inventory_item
 # -------------------------
 
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, 
     QLabel, QLineEdit, QPushButton, QTableWidget, 
     QTableWidgetItem, QHeaderView, QMessageBox, 
-    QComboBox, QFrame, QDoubleSpinBox, QGroupBox, QSpinBox, QScrollArea
+    QComboBox, QFrame, QDoubleSpinBox, QGroupBox, QSpinBox, 
+    QScrollArea, QTabWidget, QStackedWidget, QDateTimeEdit, QDialog, QInputDialog
 )
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QDateTime
+
+class AddLineItemDialog(QDialog):
+    """A clean mini-dialog to add individual line items to an expense."""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Add Line Item")
+        self.setFixedSize(320, 180)
+        self.setStyleSheet(parent.styleSheet() if parent else "")
+        
+        layout = QFormLayout(self)
+        
+        self.input_name = QLineEdit()
+        self.input_name.setObjectName("formInput")
+        self.input_name.setPlaceholderText("e.g., Bond Paper (Ream)")
+        
+        self.input_qty = QSpinBox()
+        self.input_qty.setObjectName("formInput")
+        self.input_qty.setRange(1, 99999)
+        
+        self.input_cost = QDoubleSpinBox()
+        self.input_cost.setObjectName("formInput")
+        self.input_cost.setRange(0.01, 999999.99)
+        self.input_cost.setPrefix("₱ ")
+        
+        layout.addRow("Item Name:", self.input_name)
+        layout.addRow("Quantity:", self.input_qty)
+        layout.addRow("Unit Cost:", self.input_cost)
+        
+        btn_layout = QHBoxLayout()
+        btn_save = QPushButton("Add")
+        btn_save.setObjectName("primaryBtn")
+        btn_save.clicked.connect(self.accept)
+        
+        btn_cancel = QPushButton("Cancel")
+        btn_cancel.setObjectName("secondaryBtn")
+        btn_cancel.clicked.connect(self.reject)
+        
+        btn_layout.addWidget(btn_cancel)
+        btn_layout.addWidget(btn_save)
+        layout.addRow(btn_layout)
+
+    def get_data(self):
+        return {
+            "item_name": self.input_name.text().strip(),
+            "quantity": self.input_qty.value(),
+            "unit_cost": self.input_cost.value()
+        }
+
 
 class TransactionsView(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("contentArea")
         
-        self.current_transaction_id = None 
+        self.current_payment_id = None
+        self.current_expense_id = None
+        
         self.transactions_data = []
         self.plans_data = []
-        self.students_data = []
+        self.buckets_data = []
         self.items_data = []
+        self.students_data = []
+        
+        self.current_line_items = []
 
         self.setup_ui()
-        self.load_all_data()
 
     def showEvent(self, event):
-        """Refreshes the data every time the tab is clicked!"""
         super().showEvent(event)
         self.load_all_data()
 
@@ -45,7 +96,7 @@ class TransactionsView(QWidget):
         main_layout.setSpacing(24)
 
         # ==========================================
-        # LEFT COLUMN (Main Table)
+        # LEFT COLUMN (Tabs & Tables)
         # ==========================================
         left_col = QVBoxLayout()
         left_col.setSpacing(16)
@@ -54,136 +105,69 @@ class TransactionsView(QWidget):
         title.setObjectName("pageTitle")
         left_col.addWidget(title)
 
-        self.table = QTableWidget()
-        self.table.setObjectName("modernTable")
-        self.table.setColumnCount(6)
-        self.table.setHorizontalHeaderLabels([
-            "ID", "Date", "Type", "Amount", "Status", "Approval"
-        ])
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self.table.setShowGrid(False) 
-        self.table.verticalHeader().setVisible(False)
-        self.table.setMinimumWidth(400) 
-        self.table.itemSelectionChanged.connect(self.on_table_select)
-        
-        left_col.addWidget(self.table)
-        
+        self.tabs = QTabWidget()
+        self.tabs.setObjectName("modernTabs")
+        self.tabs.currentChanged.connect(self.on_tab_changed)
+
+        self.table_payments = self._create_table(["ID", "Date", "Student", "Amount", "Approval", "Status"])
+        self.table_payments.itemSelectionChanged.connect(self.on_payment_select)
+        self.tabs.addTab(self.table_payments, "Payments")
+
+        self.table_expenses = self._create_table(["ID", "Date", "Budget Item", "Amount", "Approval", "Status"])
+        self.table_expenses.itemSelectionChanged.connect(self.on_expense_select)
+        self.tabs.addTab(self.table_expenses, "Expenses")
+
+        left_col.addWidget(self.tabs)
+
         # ==========================================
-        # RIGHT COLUMN (Dynamic Form Panel WITH SCROLL)
+        # RIGHT COLUMN (Profile Panel & Stacked Forms)
         # ==========================================
         self.right_panel = QFrame()
         self.right_panel.setObjectName("profilePanel")
-        self.right_panel.setFixedWidth(380) 
+        self.right_panel.setFixedWidth(400) 
         
-        panel_outer_layout = QVBoxLayout(self.right_panel)
-        panel_outer_layout.setContentsMargins(0, 0, 0, 0)
+        panel_layout = QVBoxLayout(self.right_panel)
+        panel_layout.setContentsMargins(24, 32, 24, 32)
+        panel_layout.setSpacing(16)
         
+        self.form_title = QLabel("Payment Details")
+        self.form_title.setObjectName("panelTitle")
+        self.form_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        panel_layout.addWidget(self.form_title)
+
+        # Using ScrollArea to prevent form clipping
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         scroll_area.setStyleSheet("QScrollArea { border: none; background: transparent; } QWidget#scrollContainer { background: transparent; }")
         
         scroll_container = QWidget()
         scroll_container.setObjectName("scrollContainer")
-        
-        panel_layout = QVBoxLayout(scroll_container)
-        panel_layout.setContentsMargins(24, 24, 24, 24)
-        panel_layout.setSpacing(16)
-        
-        form_title = QLabel("Transaction Details")
-        form_title.setObjectName("panelTitle")
-        form_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        panel_layout.addWidget(form_title)
-        
-        # --- Core Form Fields ---
-        form_layout = QFormLayout()
-        form_layout.setVerticalSpacing(12)
-        
-        self.input_plan = QComboBox()
-        self.input_type = QComboBox()
-        self.input_type.addItems(["PAYMENT", "EXPENSE"])
-        self.input_type.currentTextChanged.connect(self.on_type_changed)
-        
-        self.input_amount = QDoubleSpinBox()
-        self.input_amount.setRange(0, 9999999)
-        self.input_amount.setPrefix("₱ ")
-        
-        self.lbl_student = QLabel("Student (Payer)")
-        self.input_student = QComboBox()
-        
-        self.lbl_item = QLabel("Budget Item")
-        self.input_item = QComboBox()
-        
-        self.lbl_approver = QLabel("Approved By")
-        self.input_approver = QComboBox()
-        
-        self.lbl_receipt = QLabel("Receipt Path")
-        self.input_receipt = QLineEdit()
-        self.input_receipt.setPlaceholderText("File path...")
+        scroll_layout = QVBoxLayout(scroll_container)
+        scroll_layout.setContentsMargins(0, 0, 0, 0)
 
-        self.input_status = QComboBox()
-        self.input_status.addItems(["Active", "Void"])
+        # THE FIX: Form Stack is created here!
+        self.form_stack = QStackedWidget()
+        self.setup_payment_form()
+        self.setup_expense_form()
         
-        self.input_approval = QComboBox()
-        self.input_approval.addItems(["Pending", "Approved", "Rejected"])
+        scroll_layout.addWidget(self.form_stack)
+        scroll_layout.addStretch()
+        scroll_area.setWidget(scroll_container)
+        
+        panel_layout.addWidget(scroll_area)
 
-        self.input_notes = QLineEdit()
-        self.input_notes.setPlaceholderText("Optional notes...")
-
-        form_layout.addRow("Budget Plan *", self.input_plan)
-        form_layout.addRow("Type *", self.input_type)
-        form_layout.addRow("Amount *", self.input_amount)
-        form_layout.addRow(self.lbl_student, self.input_student)
-        form_layout.addRow(self.lbl_item, self.input_item)
-        form_layout.addRow(self.lbl_approver, self.input_approver)
-        form_layout.addRow("Status", self.input_status)
-        form_layout.addRow("Approval", self.input_approval)
-        form_layout.addRow(self.lbl_receipt, self.input_receipt)
-        form_layout.addRow("Notes", self.input_notes)
-        
-        panel_layout.addLayout(form_layout)
-
-        # --- INVENTORY SECTION (Only for Expenses) ---
-        self.group_inventory = QGroupBox("Inventory Details (Optional)")
-        self.group_inventory.setStyleSheet("QGroupBox { font-weight: bold; color: #6C5CE7; padding-top: 15px; margin-top: 10px; }")
-        inv_layout = QFormLayout()
-        inv_layout.setVerticalSpacing(10)
-
-        self.inv_name = QLineEdit()
-        self.inv_name.setPlaceholderText("e.g. Printer Ink")
-        
-        self.inv_qty = QSpinBox()
-        self.inv_qty.setRange(1, 999)
-        
-        self.inv_condition = QComboBox()
-        self.inv_condition.addItems(["New", "Good", "Fair", "Poor"])
-        
-        self.inv_status = QComboBox()
-        self.inv_status.addItems(["Active", "In Use", "Stored", "Lost/Damaged", "Disposed"])
-
-        inv_layout.addRow("Item Name", self.inv_name)
-        inv_layout.addRow("Quantity", self.inv_qty)
-        inv_layout.addRow("Condition", self.inv_condition)
-        inv_layout.addRow("Status", self.inv_status)
-        
-        self.group_inventory.setLayout(inv_layout)
-        panel_layout.addWidget(self.group_inventory)
-
-        panel_layout.addStretch()
-        
-        # --- Buttons ---
-        self.btn_save = QPushButton("Save Transaction")
+        # Action Buttons
+        self.btn_save = QPushButton("Save Payment")
         self.btn_save.setObjectName("primaryBtn")
-        self.btn_save.clicked.connect(self.save_transaction)
+        self.btn_save.clicked.connect(self.save_current_form)
         
         self.btn_clear = QPushButton("Clear")
         self.btn_clear.setObjectName("secondaryBtn")
-        self.btn_clear.clicked.connect(self.clear_form)
+        self.btn_clear.clicked.connect(self.clear_current_form)
         
         self.btn_delete = QPushButton("Delete")
         self.btn_delete.setObjectName("dangerBtn")
-        self.btn_delete.clicked.connect(self.delete_transaction)
+        self.btn_delete.clicked.connect(self.delete_current_record)
 
         btn_row = QHBoxLayout()
         btn_row.addWidget(self.btn_clear)
@@ -192,223 +176,415 @@ class TransactionsView(QWidget):
         panel_layout.addWidget(self.btn_save)
         panel_layout.addLayout(btn_row)
 
-        scroll_area.setWidget(scroll_container)
-        panel_outer_layout.addWidget(scroll_area)
-
         main_layout.addLayout(left_col, stretch=1)
         main_layout.addWidget(self.right_panel)
 
-        for inp in [self.input_plan, self.input_type, self.input_amount, self.input_student, 
-                    self.input_item, self.input_approver, self.input_status, self.input_approval, 
-                    self.input_receipt, self.input_notes, self.inv_name, self.inv_qty, 
-                    self.inv_condition, self.inv_status]:
-            inp.setObjectName("formInput")
+    def _create_table(self, headers):
+        table = QTableWidget()
+        table.setObjectName("modernTable")
+        table.setColumnCount(len(headers))
+        table.setHorizontalHeaderLabels(headers)
+        table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        table.setShowGrid(False) 
+        table.verticalHeader().setVisible(False)
+        return table
 
-        self.on_type_changed("PAYMENT")
+    def setup_payment_form(self):
+        widget = QWidget()
+        layout = QFormLayout(widget)
+        layout.setVerticalSpacing(12)
+        
+        self.pay_plan = QComboBox()
+        self.pay_student = QComboBox()
+        self.pay_amount = QDoubleSpinBox()
+        self.pay_amount.setRange(0, 9999999)
+        self.pay_amount.setPrefix("₱ ")
+        
+        self.pay_date = QDateTimeEdit(QDateTime.currentDateTime())
+        self.pay_date.setDisplayFormat("yyyy-MM-dd HH:mm")
+        
+        self.pay_approval = QComboBox()
+        self.pay_approval.addItems(["Pending", "Approved", "Rejected"])
+        self.pay_approver = QComboBox()
+        self.pay_status = QComboBox()
+        self.pay_status.addItems(["Active", "Void"])
+        self.pay_notes = QLineEdit()
 
-    def on_type_changed(self, tx_type):
-        is_payment = (tx_type == "PAYMENT")
-        
-        self.lbl_student.setVisible(is_payment)
-        self.input_student.setVisible(is_payment)
-        
-        self.lbl_item.setVisible(not is_payment)
-        self.input_item.setVisible(not is_payment)
-        
-        # --- THE FIX: ALWAYS VISIBLE NOW ---
-        self.lbl_approver.setVisible(True)
-        self.input_approver.setVisible(True)
-        # -----------------------------------
+        for w in [self.pay_plan, self.pay_student, self.pay_amount, self.pay_date, 
+                  self.pay_approval, self.pay_approver, self.pay_status, self.pay_notes]:
+            w.setObjectName("formInput")
 
-        self.lbl_receipt.setVisible(not is_payment)
-        self.input_receipt.setVisible(not is_payment)
+        layout.addRow("Budget Plan", self.pay_plan)
+        layout.addRow("Student", self.pay_student)
+        layout.addRow("Amount", self.pay_amount)
+        layout.addRow("Date/Time", self.pay_date)
+        layout.addRow("Approval", self.pay_approval)
+        layout.addRow("Approved By", self.pay_approver)
+        layout.addRow("Status", self.pay_status)
+        layout.addRow("Notes", self.pay_notes)
         
-        self.group_inventory.setVisible(not is_payment)
+        self.form_stack.addWidget(widget)
 
+    def setup_expense_form(self):
+        widget = QWidget()
+        layout = QFormLayout(widget)
+        layout.setVerticalSpacing(12)
+        
+        self.exp_plan = QComboBox()
+        self.exp_bucket = QComboBox()
+        self.exp_item = QComboBox()
+        self.exp_bucket.currentIndexChanged.connect(self.filter_budget_items)
+        
+        self.exp_date = QDateTimeEdit(QDateTime.currentDateTime())
+        self.exp_date.setDisplayFormat("yyyy-MM-dd HH:mm")
+        
+        self.exp_approval = QComboBox()
+        self.exp_approval.addItems(["Pending", "Approved", "Rejected"])
+        self.exp_approver = QComboBox()
+        self.exp_status = QComboBox()
+        self.exp_status.addItems(["Active", "Void"])
+        
+        self.exp_receipt = QLineEdit()
+        self.exp_notes = QLineEdit()
+
+        for w in [self.exp_plan, self.exp_bucket, self.exp_item, self.exp_date, 
+                  self.exp_approval, self.exp_approver, self.exp_status, self.exp_receipt, self.exp_notes]:
+            w.setObjectName("formInput")
+
+        layout.addRow("Budget Plan", self.exp_plan)
+        layout.addRow("Fund Bucket", self.exp_bucket)
+        layout.addRow("Budget Item", self.exp_item)
+        layout.addRow("Date/Time", self.exp_date)
+        layout.addRow("Approval", self.exp_approval)
+        layout.addRow("Approved By", self.exp_approver)
+        layout.addRow("Status", self.exp_status)
+        layout.addRow("Receipt Path", self.exp_receipt)
+        layout.addRow("Notes", self.exp_notes)
+        
+        # --- LINE ITEMS ---
+        self.group_lines = QGroupBox("Receipt Line Items")
+        self.group_lines.setStyleSheet("QGroupBox { font-weight: bold; color: #6C5CE7; padding-top: 15px; margin-top: 5px; border: none;}")
+        lines_layout = QVBoxLayout()
+        lines_layout.setContentsMargins(0, 10, 0, 0)
+        
+        self.table_lines = QTableWidget()
+        self.table_lines.setObjectName("modernTable")
+        self.table_lines.setColumnCount(4)
+        self.table_lines.setHorizontalHeaderLabels(["Item", "Qty", "Cost", "Sub"])
+        self.table_lines.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.table_lines.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.table_lines.setFixedHeight(130)
+        self.table_lines.verticalHeader().setVisible(False)
+        lines_layout.addWidget(self.table_lines)
+        
+        lines_btn_layout = QHBoxLayout()
+        self.btn_add_line = QPushButton("Add")
+        self.btn_add_line.setObjectName("secondaryBtn")
+        self.btn_add_line.clicked.connect(self.add_line)
+        
+        self.btn_remove_line = QPushButton("Remove")
+        self.btn_remove_line.setObjectName("dangerBtn")
+        self.btn_remove_line.clicked.connect(self.remove_line)
+        
+        self.lbl_line_total = QLabel("Total: ₱ 0.00")
+        self.lbl_line_total.setStyleSheet("font-weight: bold; color: #333; font-size: 13px;")
+        
+        lines_btn_layout.addWidget(self.btn_add_line)
+        lines_btn_layout.addWidget(self.btn_remove_line)
+        lines_btn_layout.addStretch()
+        lines_btn_layout.addWidget(self.lbl_line_total)
+        
+        lines_layout.addLayout(lines_btn_layout)
+        self.group_lines.setLayout(lines_layout)
+        
+        layout.addRow(self.group_lines)
+        self.form_stack.addWidget(widget)
+
+    # --- DATA LOADING ---
     def load_all_data(self):
         try:
             self.transactions_data = list_transactions()
             self.plans_data = list_budget_plans()
-            self.students_data = list_students()
+            self.buckets_data = list_fund_buckets()
             self.items_data = list_budget_items()
+            self.students_data = list_students()
             
             self.populate_dropdowns()
-            self.refresh_table()
+            self.refresh_payments_table()
+            self.refresh_expenses_table()
         except Exception as e:
             QMessageBox.warning(self, "Data Error", f"Could not load data: {e}")
 
     def populate_dropdowns(self):
-        self.input_plan.clear()
+        self.pay_plan.clear()
+        self.exp_plan.clear()
         for p in self.plans_data:
-            if isinstance(p, dict):
-                self.input_plan.addItem(f"Plan {p.get('plan_id')} ({p.get('academic_year')})", p.get("plan_id"))
+            plan_text = f"Plan {p.get('plan_id')} ({p.get('academic_year')})"
+            self.pay_plan.addItem(plan_text, p.get("plan_id"))
+            self.exp_plan.addItem(plan_text, p.get("plan_id"))
 
-        self.input_student.clear()
-        self.input_approver.clear()
-        self.input_approver.addItem("-- Pending Approver --", None) 
+        self.pay_student.clear()
+        self.pay_approver.clear()
+        self.exp_approver.clear()
+        
+        self.pay_approver.addItem("-- Pending Approver --", None)
+        self.exp_approver.addItem("-- Pending Approver --", None)
         
         for s in self.students_data:
-            if isinstance(s, dict):
-                label = f"{s.get('name')} ({s.get('student_id')})"
-                self.input_student.addItem(label, s.get("student_id"))
-                
-                raw_val = s.get("can_approve")
-                is_approver = False
-                
-                if isinstance(raw_val, bool):
-                    is_approver = raw_val
-                elif isinstance(raw_val, int):
-                    is_approver = (raw_val == 1)
-                elif isinstance(raw_val, str):
-                    is_approver = raw_val.strip().lower() in ['true', '1', 'yes', 't', 'y']
-
-                if is_approver:
-                    self.input_approver.addItem(label, s.get("student_id"))
-
-        self.input_item.clear()
-        for i in self.items_data:
-            if isinstance(i, dict):
-                self.input_item.addItem(f"{i.get('item_name')}", i.get("budget_item_id"))
-
-    def refresh_table(self):
-        self.table.setRowCount(0) 
-        for row_idx, t in enumerate(self.transactions_data):
-            self.table.insertRow(row_idx)
+            label = f"{s.get('name')} ({s.get('student_id')})"
+            self.pay_student.addItem(label, s.get("student_id"))
             
-            raw_date = str(t.get("transaction_date", ""))
-            clean_date = raw_date[:10] if raw_date else "Unknown"
-            
-            self.table.setItem(row_idx, 0, QTableWidgetItem(str(t.get("transaction_id", ""))))
-            self.table.setItem(row_idx, 1, QTableWidgetItem(clean_date))
-            self.table.setItem(row_idx, 2, QTableWidgetItem(str(t.get("transaction_type", ""))))
-            self.table.setItem(row_idx, 3, QTableWidgetItem(f"₱{float(t.get('amount') or 0):,.2f}"))
-            self.table.setItem(row_idx, 4, QTableWidgetItem(str(t.get("transaction_status", "Active"))))
-            self.table.setItem(row_idx, 5, QTableWidgetItem(str(t.get("approval_status", "Pending"))))
+            if str(s.get("can_approve", "")).lower() in ['true', '1', 'yes', 't', 'y']:
+                self.pay_approver.addItem(label, s.get("student_id"))
+                self.exp_approver.addItem(label, s.get("student_id"))
 
-    def on_table_select(self):
-        rows = self.table.selectedItems()
+        self.exp_bucket.clear()
+        for b in self.buckets_data:
+            self.exp_bucket.addItem(b.get("bucket_name"), b.get("bucket_id"))
+            
+        self.filter_budget_items()
+
+    def filter_budget_items(self):
+        self.exp_item.clear()
+        bucket_id = self.exp_bucket.currentData()
+        if not bucket_id: return
+        filtered = [i for i in self.items_data if i.get('bucket_id') == bucket_id]
+        for i in filtered:
+            self.exp_item.addItem(i['item_name'], i['budget_item_id'])
+
+    # --- TABLES ---
+    def refresh_payments_table(self):
+        self.table_payments.setRowCount(0)
+        payments = [t for t in self.transactions_data if t.get("transaction_type") == "PAYMENT"]
+        for row, t in enumerate(payments):
+            self.table_payments.insertRow(row)
+            self.table_payments.setItem(row, 0, QTableWidgetItem(str(t.get("transaction_id", ""))))
+            self.table_payments.setItem(row, 1, QTableWidgetItem(str(t.get("transaction_date", ""))[:10]))
+            self.table_payments.setItem(row, 2, QTableWidgetItem(str(t.get("student_id", ""))))
+            self.table_payments.setItem(row, 3, QTableWidgetItem(f"₱{float(t.get('amount') or 0):,.2f}"))
+            self.table_payments.setItem(row, 4, QTableWidgetItem(str(t.get("approval_status", ""))))
+            self.table_payments.setItem(row, 5, QTableWidgetItem(str(t.get("transaction_status", ""))))
+
+    def refresh_expenses_table(self):
+        self.table_expenses.setRowCount(0)
+        expenses = [t for t in self.transactions_data if t.get("transaction_type") == "EXPENSE"]
+        for row, t in enumerate(expenses):
+            self.table_expenses.insertRow(row)
+            item_name = next((i['item_name'] for i in self.items_data if i['budget_item_id'] == t.get("budget_item_id")), str(t.get("budget_item_id", "")))
+            
+            self.table_expenses.setItem(row, 0, QTableWidgetItem(str(t.get("transaction_id", ""))))
+            self.table_expenses.setItem(row, 1, QTableWidgetItem(str(t.get("transaction_date", ""))[:10]))
+            self.table_expenses.setItem(row, 2, QTableWidgetItem(item_name))
+            self.table_expenses.setItem(row, 3, QTableWidgetItem(f"₱{float(t.get('amount') or 0):,.2f}"))
+            self.table_expenses.setItem(row, 4, QTableWidgetItem(str(t.get("approval_status", ""))))
+            self.table_expenses.setItem(row, 5, QTableWidgetItem(str(t.get("transaction_status", ""))))
+
+    def refresh_lines_ui(self):
+        self.table_lines.setRowCount(0)
+        total = 0.0
+        for row, item in enumerate(self.current_line_items):
+            self.table_lines.insertRow(row)
+            subtotal = item['quantity'] * item['unit_cost']
+            total += subtotal
+            
+            self.table_lines.setItem(row, 0, QTableWidgetItem(item['item_name']))
+            self.table_lines.setItem(row, 1, QTableWidgetItem(str(item['quantity'])))
+            self.table_lines.setItem(row, 2, QTableWidgetItem(f"{item['unit_cost']:.2f}"))
+            self.table_lines.setItem(row, 3, QTableWidgetItem(f"{subtotal:.2f}"))
+            
+        self.lbl_line_total.setText(f"Total: ₱ {total:,.2f}")
+
+    def add_line(self):
+        dialog = AddLineItemDialog(self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            data = dialog.get_data()
+            if not data["item_name"]: return
+            self.current_line_items.append(data)
+            self.refresh_lines_ui()
+
+    def remove_line(self):
+        rows = self.table_lines.selectedItems()
+        if not rows: return
+        self.current_line_items.pop(rows[0].row())
+        self.refresh_lines_ui()
+
+    # --- SELECTIONS & TABS ---
+    def on_tab_changed(self, index):
+        # THE FIX: Prevents the crash during initialization!
+        if not hasattr(self, 'form_stack'): return 
+        
+        self.form_stack.setCurrentIndex(index)
+        self.form_title.setText("Payment Details" if index == 0 else "Expense Details")
+        self.btn_save.setText("Save Payment" if index == 0 else "Save Expense")
+        
+        if index == 0 and not self.current_payment_id: self.clear_current_form()
+        elif index == 1 and not self.current_expense_id: self.clear_current_form()
+
+    def on_payment_select(self):
+        rows = self.table_payments.selectedItems()
         if not rows: return
         
-        self.current_transaction_id = int(self.table.item(rows[0].row(), 0).text())
+        self.current_payment_id = int(self.table_payments.item(rows[0].row(), 0).text())
+        tx = next((t for t in self.transactions_data if str(t.get("transaction_id")) == str(self.current_payment_id)), None)
+        if not tx: return
         
-        tx = None
-        for t in self.transactions_data:
-            if isinstance(t, dict) and str(t.get("transaction_id")) == str(self.current_transaction_id):
-                tx = t
-                break
-                
-        if tx:
-            idx_plan = self.input_plan.findData(tx.get("plan_id"))
-            if idx_plan >= 0: self.input_plan.setCurrentIndex(idx_plan)
+        idx_plan = self.pay_plan.findData(tx.get("plan_id"))
+        if idx_plan >= 0: self.pay_plan.setCurrentIndex(idx_plan)
+        
+        idx_stu = self.pay_student.findData(tx.get("student_id"))
+        if idx_stu >= 0: self.pay_student.setCurrentIndex(idx_stu)
+        
+        self.pay_amount.setValue(float(tx.get("amount") or 0))
+        
+        if tx.get("transaction_date"):
+            dt = QDateTime.fromString(tx["transaction_date"], Qt.DateFormat.ISODate)
+            self.pay_date.setDateTime(dt)
             
-            self.input_type.setCurrentText(tx.get("transaction_type", "PAYMENT"))
-            self.input_amount.setValue(float(tx.get("amount") or 0))
-            
-            if tx.get("student_id"):
-                idx_stu = self.input_student.findData(tx.get("student_id"))
-                if idx_stu >= 0: self.input_student.setCurrentIndex(idx_stu)
-                
-            if tx.get("budget_item_id"):
-                idx_item = self.input_item.findData(tx.get("budget_item_id"))
-                if idx_item >= 0: self.input_item.setCurrentIndex(idx_item)
-                
-            if tx.get("approver_id"):
-                idx_app = self.input_approver.findData(tx.get("approver_id"))
-                if idx_app >= 0: self.input_approver.setCurrentIndex(idx_app)
+        self.pay_approval.setCurrentText(tx.get("approval_status", "Pending"))
+        self.pay_status.setCurrentText(tx.get("transaction_status", "Active"))
+        self.pay_notes.setText(tx.get("notes") or "")
+        
+        idx_app = self.pay_approver.findData(tx.get("approver_id"))
+        self.pay_approver.setCurrentIndex(idx_app if idx_app >= 0 else 0)
 
-            self.input_status.setCurrentText(tx.get("transaction_status", "Active"))
-            self.input_approval.setCurrentText(tx.get("approval_status", "Pending"))
-            self.input_receipt.setText(tx.get("receipt_path") or "")
-            self.input_notes.setText(tx.get("notes") or "")
-            
-            self.inv_name.clear()
-            self.inv_qty.setValue(1)
-            self.inv_condition.setCurrentIndex(0)
-            self.inv_status.setCurrentIndex(0)
+    def on_expense_select(self):
+        rows = self.table_expenses.selectedItems()
+        if not rows: return
+        
+        self.current_expense_id = int(self.table_expenses.item(rows[0].row(), 0).text())
+        tx = next((t for t in self.transactions_data if str(t.get("transaction_id")) == str(self.current_expense_id)), None)
+        if not tx: return
+        
+        idx_plan = self.exp_plan.findData(tx.get("plan_id"))
+        if idx_plan >= 0: self.exp_plan.setCurrentIndex(idx_plan)
 
-    def clear_form(self):
-        self.current_transaction_id = None
-        self.input_amount.setValue(0)
-        self.input_receipt.clear()
-        self.input_notes.clear()
-        self.input_status.setCurrentIndex(0)
-        self.input_approval.setCurrentIndex(0)
-        self.input_approver.setCurrentIndex(0)
-        
-        self.inv_name.clear()
-        self.inv_qty.setValue(1)
-        self.inv_condition.setCurrentIndex(0)
-        self.inv_status.setCurrentIndex(0)
-        
-        self.table.clearSelection()
+        if tx.get("transaction_date"):
+            dt = QDateTime.fromString(tx["transaction_date"], Qt.DateFormat.ISODate)
+            self.exp_date.setDateTime(dt)
 
-    def save_transaction(self):
-        tx_type = self.input_type.currentText()
-        plan_id = self.input_plan.currentData()
-        
-        if not plan_id:
-            QMessageBox.warning(self, "Validation Error", "You must select a Budget Plan!")
-            return
+        # Map to bucket via item
+        item_id = tx.get("budget_item_id")
+        bucket_id = next((i.get("bucket_id") for i in self.items_data if i.get("budget_item_id") == item_id), None)
+        if bucket_id:
+            idx_bucket = self.exp_bucket.findData(bucket_id)
+            if idx_bucket >= 0: self.exp_bucket.setCurrentIndex(idx_bucket)
             
-        # --- THE FIX: Approver is explicitly bundled for ALL transaction types! ---
-        data = {
-            "plan_id": plan_id,
-            "transaction_type": tx_type,
-            "amount": self.input_amount.value(),
-            "transaction_status": self.input_status.currentText(),
-            "approval_status": self.input_approval.currentText(),
-            "approver_id": self.input_approver.currentData(), 
-            "notes": self.input_notes.text().strip()
-        }
-        
-        if tx_type == "PAYMENT":
-            data["student_id"] = self.input_student.currentData()
-        else: 
-            data["budget_item_id"] = self.input_item.currentData()
-            data["receipt_path"] = self.input_receipt.text().strip()
+        idx_item = self.exp_item.findData(item_id)
+        if idx_item >= 0: self.exp_item.setCurrentIndex(idx_item)
             
-        # Validate that an approver exists if the status is "Approved"
-        if data["approval_status"] == "Approved" and not data.get("approver_id"):
-            QMessageBox.warning(self, "Validation Error", "You must select an Officer to approve this transaction!")
-            return
-        # -------------------------------------------------------------------------
+        idx_app = self.exp_approver.findData(tx.get("approver_id"))
+        self.exp_approver.setCurrentIndex(idx_app if idx_app >= 0 else 0)
+
+        self.exp_status.setCurrentText(tx.get("transaction_status", "Active"))
+        self.exp_approval.setCurrentText(tx.get("approval_status", "Pending"))
+        self.exp_receipt.setText(tx.get("receipt_path") or "")
+        self.exp_notes.setText(tx.get("notes") or "")
         
+        self.current_line_items = tx.get("line_items", []).copy()
+        self.refresh_lines_ui()
+
+    # --- CRUD ACTIONS ---
+    def clear_current_form(self):
+        idx = self.tabs.currentIndex()
+        if idx == 0:
+            self.current_payment_id = None
+            self.pay_amount.setValue(0)
+            self.pay_date.setDateTime(QDateTime.currentDateTime())
+            self.pay_notes.clear()
+            self.pay_approval.setCurrentIndex(0)
+            self.pay_status.setCurrentIndex(0)
+            self.pay_approver.setCurrentIndex(0)
+            self.table_payments.clearSelection()
+        else:
+            self.current_expense_id = None
+            self.exp_date.setDateTime(QDateTime.currentDateTime())
+            self.exp_receipt.clear()
+            self.exp_notes.clear()
+            self.exp_approval.setCurrentIndex(0)
+            self.exp_status.setCurrentIndex(0)
+            self.exp_approver.setCurrentIndex(0)
+            self.current_line_items = []
+            self.refresh_lines_ui()
+            self.table_expenses.clearSelection()
+
+    def save_current_form(self):
+        idx = self.tabs.currentIndex()
         try:
-            if self.current_transaction_id:
-                new_tx = update_transaction(self.current_transaction_id, data)
-                active_tx_id = self.current_transaction_id
-            else:
-                new_tx = create_transaction(data)
-                active_tx_id = new_tx.get("transaction_id")
-                
-            if tx_type == "EXPENSE" and self.inv_name.text().strip():
-                inv_data = {
-                    "item_name": self.inv_name.text().strip(),
-                    "quantity": self.inv_qty.value(),
-                    "item_condition": self.inv_condition.currentText(), 
-                    "status": self.inv_status.currentText(),
-                    "transaction_id": active_tx_id
-                }
-                create_inventory_item(inv_data)
-                
-            self.load_all_data()
-            self.clear_form()
-            QMessageBox.information(self, "Success", "Transaction (and Inventory if applicable) saved successfully!")
-        except Exception as e:
-            QMessageBox.warning(self, "Database Error", str(e))
+            if idx == 0:  # PAYMENTS
+                plan_id = self.pay_plan.currentData()
+                if not plan_id: raise ValueError("Please select a Budget Plan.")
 
-    def delete_transaction(self):
-        if not self.current_transaction_id:
+                data = {
+                    "plan_id": plan_id,
+                    "transaction_type": "PAYMENT",
+                    "student_id": self.pay_student.currentData(),
+                    "amount": self.pay_amount.value(),
+                    "transaction_date": self.pay_date.dateTime().toString(Qt.DateFormat.ISODate),
+                    "approval_status": self.pay_approval.currentText(),
+                    "approver_id": self.pay_approver.currentData(),
+                    "transaction_status": self.pay_status.currentText(),
+                    "notes": self.pay_notes.text().strip()
+                }
+
+                if data["approval_status"] == "Approved" and not data.get("approver_id"):
+                    raise ValueError("You must select an Officer to approve this transaction!")
+
+                if self.current_payment_id: update_transaction(self.current_payment_id, data)
+                else: create_transaction(data)
+
+            else:  # EXPENSES
+                plan_id = self.exp_plan.currentData()
+                if not plan_id: raise ValueError("Please select a Budget Plan.")
+                if not self.current_line_items: raise ValueError("Expenses require at least one Receipt Line Item.")
+
+                computed_total = sum(item['quantity'] * item['unit_cost'] for item in self.current_line_items)
+
+                data = {
+                    "plan_id": plan_id,
+                    "transaction_type": "EXPENSE",
+                    "budget_item_id": self.exp_item.currentData(),
+                    "line_items": self.current_line_items,
+                    "amount": computed_total,
+                    "transaction_date": self.exp_date.dateTime().toString(Qt.DateFormat.ISODate),
+                    "approval_status": self.exp_approval.currentText(),
+                    "approver_id": self.exp_approver.currentData(),
+                    "transaction_status": self.exp_status.currentText(),
+                    "receipt_path": self.exp_receipt.text().strip(),
+                    "notes": self.exp_notes.text().strip()
+                }
+
+                if data["approval_status"] == "Approved" and not data.get("approver_id"):
+                    raise ValueError("You must select an Officer to approve this transaction!")
+
+                if self.current_expense_id: update_transaction(self.current_expense_id, data)
+                else: create_transaction(data)
+
+            self.load_all_data()
+            self.clear_current_form()
+            QMessageBox.information(self, "Success", "Transaction saved successfully.")
+
+        except Exception as e:
+            QMessageBox.warning(self, "Error", str(e))
+
+    def delete_current_record(self):
+        idx = self.tabs.currentIndex()
+        target_id = self.current_payment_id if idx == 0 else self.current_expense_id
+        target_type = "Payment" if idx == 0 else "Expense"
+        
+        if not target_id:
+            QMessageBox.warning(self, "Selection Error", f"Please select a {target_type} to delete.")
             return
             
         reply = QMessageBox.question(self, "Confirm Delete", 
-                                     "Are you sure you want to delete this transaction?",
-                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-                                     
+                                    f"Are you sure you want to delete this {target_type}?",
+                                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+                                    
         if reply == QMessageBox.StandardButton.Yes:
             try:
-                delete_transaction(self.current_transaction_id)
+                delete_transaction(target_id)
                 self.load_all_data()
-                self.clear_form()
+                self.clear_current_form()
             except Exception as e:
-                QMessageBox.critical(self, "Delete Blocked", str(e))
+                QMessageBox.critical(self, "Delete Error", str(e))
