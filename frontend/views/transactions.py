@@ -16,9 +16,10 @@ from PyQt6.QtWidgets import (
     QLabel, QLineEdit, QPushButton, QTableWidget, 
     QTableWidgetItem, QHeaderView, QMessageBox, 
     QComboBox, QFrame, QDoubleSpinBox, QGroupBox, QSpinBox, 
-    QScrollArea, QTabWidget, QStackedWidget, QDateTimeEdit, QDialog, QInputDialog
+    QScrollArea, QTabWidget, QStackedWidget, QDateTimeEdit, QDialog, QInputDialog,
+    QCompleter
 )
-from PyQt6.QtCore import Qt, QDateTime
+from PyQt6.QtCore import Qt, QDateTime, QStringListModel
 
 class AddLineItemDialog(QDialog):
     """A clean mini-dialog to add individual line items to an expense."""
@@ -83,6 +84,7 @@ class TransactionsView(QWidget):
         self.students_data = []
         
         self.current_line_items = []
+        self.student_mapping = {}
 
         self.setup_ui()
 
@@ -197,7 +199,15 @@ class TransactionsView(QWidget):
         layout.setVerticalSpacing(12)
         
         self.pay_plan = QComboBox()
-        self.pay_student = QComboBox()
+        self.pay_plan.currentIndexChanged.connect(self.filter_students)
+        
+        self.pay_student = QLineEdit()
+        self.pay_student.setPlaceholderText("Search Name or ID...")
+        self.student_completer = QCompleter()
+        self.student_completer.setFilterMode(Qt.MatchFlag.MatchContains)
+        self.student_completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        self.pay_student.setCompleter(self.student_completer)
+        
         self.pay_amount = QDoubleSpinBox()
         self.pay_amount.setRange(0, 9999999)
         self.pay_amount.setPrefix("₱ ")
@@ -217,7 +227,7 @@ class TransactionsView(QWidget):
             w.setObjectName("formInput")
 
         layout.addRow("Budget Plan", self.pay_plan)
-        layout.addRow("Student", self.pay_student)
+        layout.addRow("Search Student", self.pay_student)
         layout.addRow("Amount", self.pay_amount)
         layout.addRow("Date/Time", self.pay_date)
         layout.addRow("Approval", self.pay_approval)
@@ -312,20 +322,22 @@ class TransactionsView(QWidget):
             self.students_data = list_students()
             
             self.populate_dropdowns()
+            self.filter_students()
             self.refresh_payments_table()
             self.refresh_expenses_table()
         except Exception as e:
             QMessageBox.warning(self, "Data Error", f"Could not load data: {e}")
 
     def populate_dropdowns(self):
+        self.pay_plan.blockSignals(True)
         self.pay_plan.clear()
         self.exp_plan.clear()
         for p in self.plans_data:
             plan_text = f"Plan {p.get('plan_id')} ({p.get('academic_year')})"
             self.pay_plan.addItem(plan_text, p.get("plan_id"))
             self.exp_plan.addItem(plan_text, p.get("plan_id"))
+        self.pay_plan.blockSignals(False)
 
-        self.pay_student.clear()
         self.pay_approver.clear()
         self.exp_approver.clear()
         
@@ -334,8 +346,6 @@ class TransactionsView(QWidget):
         
         for s in self.students_data:
             label = f"{s.get('name')} ({s.get('student_id')})"
-            self.pay_student.addItem(label, s.get("student_id"))
-            
             if str(s.get("can_approve", "")).lower() in ['true', '1', 'yes', 't', 'y']:
                 self.pay_approver.addItem(label, s.get("student_id"))
                 self.exp_approver.addItem(label, s.get("student_id"))
@@ -345,6 +355,40 @@ class TransactionsView(QWidget):
             self.exp_bucket.addItem(b.get("bucket_name"), b.get("bucket_id"))
             
         self.filter_budget_items()
+
+    def filter_students(self):
+        plan_id = self.pay_plan.currentData()
+        if not plan_id: return
+
+        paid_student_ids = set()
+        for t in self.transactions_data:
+            if t.get("transaction_type") == "PAYMENT" and t.get("plan_id") == plan_id:
+                if t.get("transaction_status") != "Void":
+                    paid_student_ids.add(t.get("student_id"))
+
+        editing_student_id = None
+        if self.current_payment_id:
+            tx = next((t for t in self.transactions_data if str(t.get("transaction_id")) == str(self.current_payment_id)), None)
+            if tx: editing_student_id = tx.get("student_id")
+
+        current_text = self.pay_student.text()
+
+        self.student_mapping = {}
+        valid_strings = []
+
+        for s in self.students_data:
+            sid = s.get('student_id')
+            if sid not in paid_student_ids or sid == editing_student_id:
+                formatted = f"{s.get('name')} ({sid})"
+                self.student_mapping[formatted] = sid
+                valid_strings.append(formatted)
+
+        model = QStringListModel()
+        model.setStringList(valid_strings)
+        self.student_completer.setModel(model)
+        
+        if current_text and current_text not in valid_strings:
+            self.pay_student.clear()
 
     def filter_budget_items(self):
         self.exp_item.clear()
@@ -433,8 +477,14 @@ class TransactionsView(QWidget):
         idx_plan = self.pay_plan.findData(tx.get("plan_id"))
         if idx_plan >= 0: self.pay_plan.setCurrentIndex(idx_plan)
         
-        idx_stu = self.pay_student.findData(tx.get("student_id"))
-        if idx_stu >= 0: self.pay_student.setCurrentIndex(idx_stu)
+        self.filter_students()
+        
+        stu_id = tx.get("student_id")
+        student = next((s for s in self.students_data if s.get("student_id") == stu_id), None)
+        if student:
+            self.pay_student.setText(f"{student.get('name')} ({stu_id})")
+        else:
+            self.pay_student.clear()
         
         self.pay_amount.setValue(float(tx.get("amount") or 0))
         
@@ -490,6 +540,7 @@ class TransactionsView(QWidget):
         idx = self.tabs.currentIndex()
         if idx == 0:
             self.current_payment_id = None
+            self.pay_student.clear()
             self.pay_amount.setValue(0)
             self.pay_date.setDateTime(QDateTime.currentDateTime())
             self.pay_notes.clear()
@@ -497,6 +548,7 @@ class TransactionsView(QWidget):
             self.pay_status.setCurrentIndex(0)
             self.pay_approver.setCurrentIndex(0)
             self.table_payments.clearSelection()
+            self.filter_students()
         else:
             self.current_expense_id = None
             self.exp_date.setDateTime(QDateTime.currentDateTime())
@@ -516,10 +568,16 @@ class TransactionsView(QWidget):
                 plan_id = self.pay_plan.currentData()
                 if not plan_id: raise ValueError("Please select a Budget Plan.")
 
+                student_text = self.pay_student.text().strip()
+                student_id = self.student_mapping.get(student_text)
+                
+                if not student_id:
+                    raise ValueError("Please select a valid student from the search suggestions.")
+
                 data = {
                     "plan_id": plan_id,
                     "transaction_type": "PAYMENT",
-                    "student_id": self.pay_student.currentData(),
+                    "student_id": student_id,
                     "amount": self.pay_amount.value(),
                     "transaction_date": self.pay_date.dateTime().toString(Qt.DateFormat.ISODate),
                     "approval_status": self.pay_approval.currentText(),
