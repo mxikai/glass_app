@@ -1,622 +1,453 @@
 import sys
 import os
 
-#THIS ALL NEEDS REWORKING 
-
+# --- THE MASTER BRIDGE ---
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-backend_path = os.path.join(project_root, 'backend')
-if backend_path not in sys.path:
-    sys.path.insert(0, backend_path)
-
-from backend.services.budget_service import list_budget_plans
+from backend.services.dashboard_service import get_dashboard_summary
 from backend.services.transaction_service import list_transactions
+from backend.services.budget_service import list_budget_plans
+# -------------------------
 
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QPushButton, QScrollArea, QFrame, QProgressBar, QLineEdit,
-    QSizePolicy, QGridLayout
+    QFrame, QProgressBar, QScrollArea, QTableWidget,
+    QTableWidgetItem, QHeaderView, QComboBox
 )
 from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtGui import QPainter, QPen, QColor, QPolygonF
-from PyQt6.QtCore import QPointF
-import math
+from PyQt6.QtGui import QPainter, QPen, QColor, QPainterPath
 
-
+# ==========================================
+# CUSTOM UI COMPONENTS
+# ==========================================
 class MiniChart(QWidget):
-    def __init__(self, data: list, color: str = "#ffffff", parent=None):
+    """Draws a smooth, curved line chart for the cash flow."""
+    def __init__(self, data: list, line_color: str = "#FFFFFF", parent=None):
         super().__init__(parent)
         self.data = data
-        self.color = QColor(color)
-        self.setMinimumHeight(60)
+        self.line_color = QColor(line_color)
+        self.setMinimumHeight(150)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+
+    def update_data(self, data):
+        self.data = data
+        self.update()
 
     def paintEvent(self, event):
-        if not self.data:
-            return
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-        w, h = self.width(), self.height()
-        mn, mx = min(self.data), max(self.data)
-        rng = mx - mn or 1
-        pad = 8
+        # Safely extract the amount values
+        values = [float(point.get('amount', 0)) for point in self.data]
+        
+        # If no data, draw a flat zero line
+        if len(values) == 0:
+            values = [0.0, 0.0]
+        # If only 1 approved transaction, draw a line from 0 to that amount
+        elif len(values) == 1:
+            values.insert(0, 0.0)
 
-        def pt(i, v):
-            x = pad + (i / (len(self.data) - 1)) * (w - 2 * pad)
-            y = h - pad - ((v - mn) / rng) * (h - 2 * pad)
-            return QPointF(x, y)
+        width = self.width()
+        height = self.height()
+        
+        max_val = max(values) if max(values) > 0 else 1
+        min_val = min(values)
+        val_range = max_val - min_val if max_val != min_val else 1
 
-        pts = [pt(i, v) for i, v in enumerate(self.data)]
+        path = QPainterPath()
+        step_x = width / (len(values) - 1)
 
-        # Fill area
-        fill_color = QColor(self.color)
-        fill_color.setAlpha(40)
-        poly = QPolygonF([QPointF(pts[0].x(), h), *pts, QPointF(pts[-1].x(), h)])
-        painter.setBrush(fill_color)
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.drawPolygon(poly)
+        start_y = height - ((values[0] - min_val) / val_range * (height - 30)) - 15
+        path.moveTo(0, start_y)
 
-        # Line
-        pen = QPen(self.color, 2.5)
+        for i in range(1, len(values)):
+            x1 = (i - 1) * step_x
+            y1 = height - ((values[i - 1] - min_val) / val_range * (height - 30)) - 15
+            x2 = i * step_x
+            y2 = height - ((values[i] - min_val) / val_range * (height - 30)) - 15
+
+            ctrl1_x = x1 + (x2 - x1) / 2
+            ctrl1_y = y1
+            ctrl2_x = x1 + (x2 - x1) / 2
+            ctrl2_y = y2
+
+            path.cubicTo(ctrl1_x, ctrl1_y, ctrl2_x, ctrl2_y, x2, y2)
+
+        pen = QPen(self.line_color, 4)
         pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-        pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
         painter.setPen(pen)
-        for i in range(len(pts) - 1):
-            painter.drawLine(pts[i], pts[i + 1])
-
-        # Highlight last point
-        painter.setBrush(self.color)
-        painter.setPen(QPen(QColor("white"), 2))
-        last = pts[-1]
-        painter.drawEllipse(last, 5, 5)
+        painter.drawPath(path)
 
 
-class BudgetBarChart(QWidget):
-    def __init__(self, data: list, parent=None):
-        """data = [(label, used, total), ...]"""
-        super().__init__(parent)
-        self.data = data
-        self.setMinimumHeight(len(data) * 36 + 16)
-
-    def paintEvent(self, event):
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-
-        w, h = self.width(), self.height()
-        row_h = h / len(self.data)
-        bar_h = 8
-        label_w = 120
-        bar_w = w - label_w - 60
-
-        colors = ["#6C5CE7", "#FD79A8", "#00B894", "#FDCB6E", "#74B9FF"]
-
-        for i, (label, used, total) in enumerate(self.data):
-            y_center = i * row_h + row_h / 2
-
-            # Label
-            painter.setPen(QColor("#1A1A3E"))
-            font = painter.font()
-            font.setFamily("Segoe UI")
-            font.setPointSize(9)
-            painter.setFont(font)
-            painter.drawText(0, int(y_center - 6), label_w, 20, Qt.AlignmentFlag.AlignVCenter, label)
-
-            # Background bar
-            painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(QColor("#EEF0F8"))
-            bar_x = label_w
-            bar_y = int(y_center - bar_h / 2)
-            painter.drawRoundedRect(bar_x, bar_y, int(bar_w), bar_h, 4, 4)
-
-            # Filled portion
-            fill = int(bar_w * min(used / total, 1.0)) if total > 0 else 0
-            painter.setBrush(QColor(colors[i % len(colors)]))
-            painter.drawRoundedRect(bar_x, bar_y, fill, bar_h, 4, 4)
-
-            # Percentage
-            pct = f"{int(used / total * 100)}%" if total > 0 else "0%"
-            painter.setPen(QColor("#9B9BB0"))
-            font.setPointSize(8)
-            painter.setFont(font)
-            painter.drawText(bar_x + int(bar_w) + 6, int(y_center - 6), 50, 20, Qt.AlignmentFlag.AlignVCenter, pct)
-
-
-# ── Dashboard page ────────────────────────────────────────────────────────────
+# ==========================================
+# MAIN DASHBOARD VIEW
+# ==========================================
 class DashboardView(QWidget):
-    # Mock data
-    MOCK = {
-        "semester": "1st Semester AY 2025–2026",
-        "plan_status": "Approved",
-        "total_budget": "₱25,000.00",
-        "collected": "₱18,750.00",
-        "expenses": "₱11,200.00",
-        "balance": "₱7,550.00",
-        "pending_payments": 12,
-        "pending_txns": 3,
-        "member_count": 100,
-        "semestral_fee": "₱250.00",
-        "chart_data": [40, 65, 55, 80, 70, 90, 75, 95, 88, 100],
-        "buckets": [
-            ("Events",     11200, 15000),
-            ("Supplies",   3400,  5000),
-            ("Operations", 1800,  3000),
-            ("Emergency",  0,     2000),
-        ],
-        "recent_payments": [
-            ("Kotomi T.", "2024-0001", "₱250", "Paid"),
-            ("Jun Reyes",  "2024-0042", "₱250", "Paid"),
-            ("Maria Cruz", "2024-0078", "₱250", "Pending"),
-            ("Rico Lim",   "2024-0093", "₱250", "Paid"),
-            ("Ana Santos", "2024-0112", "₱250", "Pending"),
-        ],
-    }
-
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("contentArea")
         
-        self._fetch_initial_data()
-        self._build_ui()
-        self.setup_auto_update()
+        self.setup_ui()
+        self.load_plans()
+        
+        # Silent Background Auto-Sync
+        self.sync_timer = QTimer(self)
+        self.sync_timer.timeout.connect(self.refresh_dashboard)
+        self.sync_timer.start(3000) 
 
-    def _fetch_initial_data(self):
-        try:
-            plans = list_budget_plans()
-            txns = list_transactions()
-            
-            if plans:
-                active_plans = [p for p in plans if p.get("status") == "Active"]
-                current_plan = active_plans[-1] if active_plans else plans[-1]
-                plan_id = current_plan.get("plan_id")
-                
-                # Update Semester & Total Budget
-                real_budget = float(current_plan.get("total_planned_budget") or 0)
-                self.MOCK["total_budget"] = f"₱{real_budget:,.2f}"
-                self.MOCK["semester"] = f"{current_plan.get('semester', '')} Sem {current_plan.get('academic_year', '')}"
-                
-                # Process Transactions for the Chart and Balances
-                plan_txns = [t for t in txns if t.get("plan_id") == plan_id and t.get("transaction_status") != "Void"]
-                plan_txns.sort(key=lambda x: x.get("transaction_date", "")) # Sort chronologically
-                
-                collected = 0.0
-                expenses = 0.0
-                running_balance = 0.0
-                chart_data = [0.0] # Chart starts at 0
-                
-                for t in plan_txns:
-                    amt = float(t.get("amount") or 0)
-                    if t.get("transaction_type") == "PAYMENT":
-                        collected += amt
-                        running_balance += amt
-                    elif t.get("transaction_type") == "EXPENSE":
-                        expenses += amt
-                        running_balance -= amt
-                    
-                    chart_data.append(running_balance)
-                
-                # If there are no transactions yet, make a flat line so it doesn't crash
-                if len(chart_data) == 1:
-                    chart_data.append(0.0)
-                    
-                # Save calculated data
-                self.MOCK["collected"] = f"₱{collected:,.2f}"
-                self.MOCK["expenses"] = f"₱{expenses:,.2f}"
-                self.MOCK["balance"] = f"₱{(collected - expenses):,.2f}"
-                self.MOCK["chart_data"] = chart_data
-                
-        except Exception as e:
-            print(f"Backend connection error: {e}")
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.load_plans()
 
-    def setup_auto_update(self):
-        self.refresh_timer = QTimer(self)
-        self.refresh_timer.timeout.connect(self.refresh_budget_data)
-        self.refresh_timer.start(5000)
+    def setup_ui(self):
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(28, 24, 28, 24)
+        main_layout.setSpacing(24)
 
-    def refresh_budget_data(self):
-        try:
-            self._fetch_initial_data()
-    
-            for chart in self.findChildren(MiniChart):
-                chart.data = self.MOCK["chart_data"]
-                chart.update()
-            
-            overview_labels = [l for l in self.findChildren(QLabel) if l.objectName() == "overviewValue"]
-            if len(overview_labels) >= 3:
-                overview_labels[0].setText(self.MOCK["total_budget"])
-                overview_labels[1].setText(self.MOCK["collected"])
-                overview_labels[2].setText(self.MOCK["balance"])
-                
-            card_labels = [l for l in self.findChildren(QLabel) if l.objectName() == "cardValue"]
-            if len(card_labels) >= 4:
-                card_labels[0].setText(self.MOCK["total_budget"])
-                card_labels[1].setText(self.MOCK["collected"])
-                card_labels[2].setText(self.MOCK["expenses"])
-                card_labels[3].setText(self.MOCK["balance"])
-                
-        except Exception as e:
-            pass
+        # --- HEADER ---
+        header_layout = QHBoxLayout()
+        
+        title_layout = QVBoxLayout()
+        self.lbl_title = QLabel("Dashboard Overview")
+        self.lbl_title.setObjectName("pageTitle")
+        
+        self.lbl_subtitle = QLabel("Select a plan to view analytics")
+        self.lbl_subtitle.setStyleSheet("color: #9B9BB0; font-size: 13px;")
+        
+        title_layout.addWidget(self.lbl_title)
+        title_layout.addWidget(self.lbl_subtitle)
+        
+        # PLAN SELECTOR DROPDOWN
+        self.combo_plan = QComboBox()
+        self.combo_plan.setObjectName("formInput")
+        self.combo_plan.setFixedWidth(250)
+        self.combo_plan.currentIndexChanged.connect(self.refresh_dashboard)
+        
+        header_layout.addLayout(title_layout)
+        header_layout.addStretch()
+        header_layout.addWidget(QLabel("<b>Active Plan:</b> "))
+        header_layout.addWidget(self.combo_plan)
+        main_layout.addLayout(header_layout)
 
-    def _build_ui(self):
-        root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
-        root.setSpacing(0)
+        # --- CONTENT SPLIT ---
+        content_layout = QHBoxLayout()
+        content_layout.setSpacing(24)
+        
+        # ==========================================
+        # LEFT COLUMN (Overview & Recent Activity)
+        # ==========================================
+        left_col = QVBoxLayout()
+        left_col.setSpacing(20)
 
+        # 1. Main Financial Overview Card (STRICT PURPLE)
+        self.card_overview = QFrame()
+        self.card_overview.setObjectName("purpleOverviewCard")
+        self.card_overview.setStyleSheet("""
+            QFrame#purpleOverviewCard {
+                background-color: #6C5CE7;
+                border-radius: 16px;
+            }
+            QLabel { background: transparent; }
+        """)
+        
+        overview_layout = QVBoxLayout(self.card_overview)
+        overview_layout.setContentsMargins(24, 24, 24, 24)
+        
+        metrics_layout = QHBoxLayout()
+        
+        avail_box = QVBoxLayout()
+        avail_title = QLabel("Available Funds")
+        avail_title.setStyleSheet("color: rgba(255, 255, 255, 0.7); font-weight: 600; font-size: 13px; text-transform: uppercase;")
+        self.lbl_avail_val = QLabel("₱ 0.00")
+        self.lbl_avail_val.setStyleSheet("color: #FFFFFF; font-size: 32px; font-weight: bold;")
+        avail_box.addWidget(avail_title)
+        avail_box.addWidget(self.lbl_avail_val)
+        
+        in_box = QVBoxLayout()
+        in_title = QLabel("Total Collected")
+        in_title.setStyleSheet("color: rgba(255, 255, 255, 0.7); font-weight: 600; font-size: 12px; text-transform: uppercase;")
+        self.lbl_in_val = QLabel("₱ 0.00")
+        self.lbl_in_val.setStyleSheet("color: #FFFFFF; font-size: 20px; font-weight: bold;")
+        in_box.addWidget(in_title)
+        in_box.addWidget(self.lbl_in_val)
+
+        out_box = QVBoxLayout()
+        out_title = QLabel("Total Expenses")
+        out_title.setStyleSheet("color: rgba(255, 255, 255, 0.7); font-weight: 600; font-size: 12px; text-transform: uppercase;")
+        self.lbl_out_val = QLabel("₱ 0.00")
+        self.lbl_out_val.setStyleSheet("color: #FD79A8; font-size: 20px; font-weight: bold;")
+        out_box.addWidget(out_title)
+        out_box.addWidget(self.lbl_out_val)
+
+        metrics_layout.addLayout(avail_box)
+        metrics_layout.addStretch()
+        metrics_layout.addLayout(in_box)
+        metrics_layout.addSpacing(30)
+        metrics_layout.addLayout(out_box)
+        
+        self.chart = MiniChart([], line_color="#FFFFFF") 
+        
+        overview_layout.addLayout(metrics_layout)
+        overview_layout.addSpacing(20)
+        overview_layout.addWidget(self.chart)
+        
+        # Helper text to explain the backend logic
+        lbl_disclaimer = QLabel("* Financial metrics and chart reflect Approved & Active transactions only.")
+        lbl_disclaimer.setStyleSheet("color: rgba(255, 255, 255, 0.5); font-size: 11px;")
+        overview_layout.addWidget(lbl_disclaimer)
+        
+        left_col.addWidget(self.card_overview)
+
+        # 2. Recent Transactions Table Card
+        self.card_recent = QFrame()
+        self.card_recent.setObjectName("profilePanel")
+        recent_layout = QVBoxLayout(self.card_recent)
+        recent_layout.setContentsMargins(20, 20, 20, 20)
+        
+        recent_title = QLabel("Recent Activity")
+        recent_title.setStyleSheet("color: #1A1A3E; font-size: 16px; font-weight: bold;")
+        recent_layout.addWidget(recent_title)
+        
+        self.table_recent = QTableWidget()
+        self.table_recent.setObjectName("modernTable")
+        self.table_recent.setColumnCount(4)
+        self.table_recent.setHorizontalHeaderLabels(["Date", "Type", "Amount", "Status"])
+        self.table_recent.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.table_recent.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.table_recent.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.table_recent.setShowGrid(False)
+        self.table_recent.verticalHeader().setVisible(False)
+        
+        recent_layout.addWidget(self.table_recent)
+        left_col.addWidget(self.card_recent, stretch=1)
+
+        # ==========================================
+        # RIGHT COLUMN (Status & Buckets)
+        # ==========================================
+        right_col = QVBoxLayout()
+        right_col.setSpacing(20)
+
+        # 3. Collection & Inventory Status Card
+        self.card_status = QFrame()
+        self.card_status.setObjectName("profilePanel")
+        status_layout = QVBoxLayout(self.card_status)
+        status_layout.setContentsMargins(20, 20, 20, 20)
+        
+        stat_title = QLabel("Collection Status")
+        stat_title.setStyleSheet("color: #1A1A3E; font-size: 16px; font-weight: bold; margin-bottom: 10px;")
+        status_layout.addWidget(stat_title)
+        
+        self.prog_collection = QProgressBar()
+        self.prog_collection.setStyleSheet("""
+            QProgressBar { border-radius: 4px; background-color: #EEF0F8; border: none; }
+            QProgressBar::chunk { border-radius: 4px; background-color: #6C5CE7; }
+        """)
+        self.prog_collection.setTextVisible(False)
+        self.prog_collection.setFixedHeight(8)
+        status_layout.addWidget(self.prog_collection)
+        
+        status_metrics = QHBoxLayout()
+        self.lbl_paid_count = QLabel("0 Paid")
+        self.lbl_paid_count.setStyleSheet("color: #6C5CE7; font-weight: bold;")
+        self.lbl_pending_count = QLabel("0 Pending")
+        self.lbl_pending_count.setStyleSheet("color: #FD79A8; font-weight: bold;")
+        
+        status_metrics.addWidget(self.lbl_paid_count)
+        status_metrics.addStretch()
+        status_metrics.addWidget(self.lbl_pending_count)
+        status_layout.addLayout(status_metrics)
+        
+        status_layout.addSpacing(15)
+        
+        inv_title = QLabel("Assets & Inventory")
+        inv_title.setStyleSheet("color: #1A1A3E; font-size: 16px; font-weight: bold;")
+        status_layout.addWidget(inv_title)
+        
+        self.lbl_inv_count = QLabel("0 Total Items Logged")
+        self.lbl_inv_count.setStyleSheet("color: #9B9BB0; font-size: 14px;")
+        status_layout.addWidget(self.lbl_inv_count)
+        
+        right_col.addWidget(self.card_status)
+
+        # 4. Fund Buckets Utilization List
+        self.card_buckets = QFrame()
+        self.card_buckets.setObjectName("profilePanel")
+        buckets_wrapper_layout = QVBoxLayout(self.card_buckets)
+        buckets_wrapper_layout.setContentsMargins(20, 20, 20, 20)
+        
+        buckets_title = QLabel("Fund Utilization")
+        buckets_title.setStyleSheet("color: #1A1A3E; font-size: 16px; font-weight: bold; margin-bottom: 10px;")
+        buckets_wrapper_layout.addWidget(buckets_title)
+        
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setStyleSheet("QScrollArea { border: none; background: transparent; } QWidget#scrollContainer { background: transparent; }")
+        
+        self.buckets_container = QWidget()
+        self.buckets_container.setObjectName("scrollContainer")
+        self.buckets_layout = QVBoxLayout(self.buckets_container)
+        self.buckets_layout.setContentsMargins(0,0,0,0)
+        self.buckets_layout.setSpacing(16)
+        self.buckets_layout.addStretch()
+        
+        scroll.setWidget(self.buckets_container)
+        buckets_wrapper_layout.addWidget(scroll)
+        
+        right_col.addWidget(self.card_buckets, stretch=1)
 
-        inner = QWidget()
-        inner.setObjectName("contentArea")
-        layout = QVBoxLayout(inner)
-        layout.setContentsMargins(28, 24, 28, 24)
-        layout.setSpacing(20)
+        content_layout.addLayout(left_col, stretch=18)
+        content_layout.addLayout(right_col, stretch=10)
+        main_layout.addLayout(content_layout)
 
-        # ── Header ────────────────────────────────────────────
-        header_row = QHBoxLayout()
-        title_col = QVBoxLayout()
-        subtitle = QLabel("Primary")
-        subtitle.setObjectName("pageSubtitle")
-        title = QLabel("Dashboard")
-        title.setObjectName("pageTitle")
-        title_col.addWidget(subtitle)
-        title_col.addWidget(title)
-        title_col.setSpacing(0)
+    def load_plans(self):
+        try:
+            plans = list_budget_plans()
+            current_id = self.combo_plan.currentData()
+            
+            self.combo_plan.blockSignals(True)
+            self.combo_plan.clear()
+            
+            for p in plans:
+                if isinstance(p, dict):
+                    self.combo_plan.addItem(f"Plan {p.get('plan_id')} ({p.get('academic_year')} Sem {p.get('semester')})", p.get("plan_id"))
+            
+            if current_id:
+                idx = self.combo_plan.findData(current_id)
+                self.combo_plan.setCurrentIndex(idx if idx >= 0 else self.combo_plan.count() - 1)
+            else:
+                self.combo_plan.setCurrentIndex(self.combo_plan.count() - 1)
+                
+            self.combo_plan.blockSignals(False)
+            self.refresh_dashboard()
+            
+        except Exception as e:
+            print(f"Error loading plans: {e}")
 
-        search = QLineEdit()
-        search.setObjectName("searchBar")
-        search.setPlaceholderText("🔍  Search students, transactions…")
-        search.setFixedWidth(260)
-        search.setFixedHeight(38)
+    def refresh_dashboard(self):
+        try:
+            plan_id = self.combo_plan.currentData()
+            if not plan_id:
+                return
 
-        sem_badge = QLabel(f"  {self.MOCK['semester']}  ")
-        sem_badge.setStyleSheet(
-            "background: white; color: #6C5CE7; border-radius: 10px;"
-            "font-size: 11px; font-family: 'Segoe UI'; padding: 4px 10px;"
-        )
+            # Relying entirely on the backend's logic now!
+            data = get_dashboard_summary(plan_id)
+            all_transactions = list_transactions()
+            
+            plan = data.get("active_plan")
+            if plan:
+                self.lbl_subtitle.setText(f"Total Plan Budget: ₱{float(plan.get('total_planned_budget', 0)):,.2f}")
 
-        header_row.addLayout(title_col)
-        header_row.addStretch()
-        header_row.addWidget(sem_badge)
-        header_row.addSpacing(12)
-        header_row.addWidget(search)
-        layout.addLayout(header_row)
+            totals = data.get("totals", {})
+            self.lbl_avail_val.setText(f"₱ {float(totals.get('available_funds', 0)):,.2f}")
+            self.lbl_in_val.setText(f"₱ {float(totals.get('payments', 0)):,.2f}")
+            self.lbl_out_val.setText(f"₱ {float(totals.get('expenses', 0)):,.2f}")
+            
+            cash_flow = data.get("cash_flow", [])
+            self.chart.update_data(cash_flow)
 
-        # ── Summary stat cards ─────────────────────────────────
-        cards_row = QHBoxLayout()
-        cards_row.setSpacing(14)
-        stat_data = [
-            ("💰", self.MOCK["total_budget"],  "Total Budget",     "#6C5CE7"),
-            ("✅", self.MOCK["collected"],      "Collected",        "#00B894"),
-            ("📤", self.MOCK["expenses"],       "Expenses",         "#FD79A8"),
-            ("💵", self.MOCK["balance"],        "Balance",          "#FDCB6E"),
-            ("⏳", str(self.MOCK["pending_payments"]), "Pending Payments", "#E17055"),
-            ("🔄", str(self.MOCK["pending_txns"]),     "Pending Txns",     "#74B9FF"),
+            coll = data.get("collection_progress", {})
+            paid = coll.get('paid_count', 0)
+            pending = coll.get('pending_count', 0)
+            total_students = paid + pending
+            
+            self.lbl_paid_count.setText(f"{paid} Paid")
+            self.lbl_pending_count.setText(f"{pending} Pending")
+            
+            if total_students > 0:
+                self.prog_collection.setValue(int((paid / total_students) * 100))
+            else:
+                self.prog_collection.setValue(0)
+                
+            inv = data.get("inventory_summary", {})
+            self.lbl_inv_count.setText(f"{inv.get('total_items', 0)} Unique Items ({inv.get('total_quantity', 0)} Qty)")
+
+            # Update Recent Transactions (This lists ALL transactions, not just approved ones)
+            self.update_recent_transactions(all_transactions, plan_id)
+            
+            self.update_buckets(data.get("fund_bucket_utilization", []))
+            
+        except Exception as e:
+            print(f"Dashboard Sync Error: {e}")
+
+    def update_recent_transactions(self, transactions, current_plan_id):
+        plan_txns = [t for t in transactions if str(t.get('plan_id')) == str(current_plan_id)]
+        recent = sorted(plan_txns, key=lambda x: x.get('transaction_id', 0), reverse=True)[:8]
+        
+        self.table_recent.setRowCount(0)
+        for row, t in enumerate(recent):
+            self.table_recent.insertRow(row)
+            
+            date_str = str(t.get("transaction_date", ""))[:10]
+            tx_type = str(t.get("transaction_type", ""))
+            amount = f"₱ {float(t.get('amount') or 0):,.2f}"
+            status = str(t.get("approval_status", ""))
+            
+            self.table_recent.setItem(row, 0, QTableWidgetItem(date_str))
+            
+            type_item = QTableWidgetItem(tx_type)
+            if tx_type == "PAYMENT":
+                type_item.setForeground(QColor("#00B894")) 
+            else:
+                type_item.setForeground(QColor("#FD79A8")) 
+            self.table_recent.setItem(row, 1, type_item)
+            
+            self.table_recent.setItem(row, 2, QTableWidgetItem(amount))
+            
+            status_item = QTableWidgetItem(status)
+            if status == "Pending":
+                status_item.setForeground(QColor("#E65100")) # Orange for pending warning
+            self.table_recent.setItem(row, 3, status_item)
+
+    def update_buckets(self, buckets_data):
+        while self.buckets_layout.count() > 1:
+            item = self.buckets_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        if not buckets_data:
+            empty_lbl = QLabel("No buckets allocated for this plan.")
+            empty_lbl.setStyleSheet("color: #9B9BB0;")
+            self.buckets_layout.insertWidget(0, empty_lbl)
+            return
+
+        colors = [
+            "QProgressBar::chunk { border-radius: 4px; background-color: #6C5CE7; }", 
+            "QProgressBar::chunk { border-radius: 4px; background-color: #FD79A8; }", 
+            "QProgressBar::chunk { border-radius: 4px; background-color: #00B894; }"  
         ]
-        for icon, val, lbl, accent in stat_data:
-            card = self._stat_card(icon, val, lbl, accent)
-            cards_row.addWidget(card)
-        layout.addLayout(cards_row)
 
-        # ── Main row: overview chart + right panel ─────────────
-        main_row = QHBoxLayout()
-        main_row.setSpacing(18)
-
-        # Left: overview card + bucket cards
-        left_col = QVBoxLayout()
-        left_col.setSpacing(16)
-        left_col.addWidget(self._overview_card())
-        left_col.addWidget(self._buckets_section())
-
-        # Right panel
-        right_panel = self._right_panel()
-        right_panel.setFixedWidth(260)
-
-        main_row.addLayout(left_col, stretch=3)
-        main_row.addWidget(right_panel, stretch=0)
-        layout.addLayout(main_row)
-
-        layout.addStretch()
-        scroll.setWidget(inner)
-        root.addWidget(scroll)
-
-    # ── Card builders ─────────────────────────────────────────
-    def _stat_card(self, icon, value, label, accent):
-        card = QWidget()
-        card.setObjectName("statCard")
-        card.setFixedHeight(95)
-        v = QVBoxLayout(card)
-        v.setContentsMargins(16, 14, 16, 14)
-        v.setSpacing(2)
-
-        icon_lbl = QLabel(icon)
-        icon_lbl.setStyleSheet(f"font-size: 18px; color: {accent};")
-        val_lbl = QLabel(value)
-        val_lbl.setObjectName("cardValue")
-        val_lbl.setStyleSheet(f"font-size: 17px; font-weight: 700; color: #1A1A3E;")
-        lbl_lbl = QLabel(label)
-        lbl_lbl.setObjectName("cardLabel")
-
-        v.addWidget(icon_lbl)
-        v.addWidget(val_lbl)
-        v.addWidget(lbl_lbl)
-        return card
-
-    def _overview_card(self):
-        card = QWidget()
-        card.setObjectName("overviewCard")
-        card.setMinimumHeight(200)
-
-        outer = QVBoxLayout(card)
-        outer.setContentsMargins(22, 18, 22, 14)
-        outer.setSpacing(8)
-
-        # Top row
-        top = QHBoxLayout()
-        title = QLabel("Budget Overview")
-        title.setObjectName("overviewTitle")
-        combo = QPushButton("This Semester  ▾")
-        combo.setStyleSheet(
-            "background: rgba(255,255,255,0.18); color: rgba(255,255,255,0.85);"
-            "border-radius: 8px; border: none; font-size: 11px;"
-            "padding: 4px 10px; font-family: 'Segoe UI';"
-        )
-        top.addWidget(title)
-        top.addStretch()
-        top.addWidget(combo)
-        outer.addLayout(top)
-
-        # Chart
-        chart = MiniChart(self.MOCK["chart_data"], color="#ffffff")
-        chart.setMinimumHeight(90)
-        outer.addWidget(chart)
-
-        # Bottom stats row
-        bottom = QHBoxLayout()
-        bottom.setSpacing(24)
-        stats = [
-            ("Total Budget",    self.MOCK["total_budget"]),
-            ("Collected",       self.MOCK["collected"]),
-            ("Remaining",       self.MOCK["balance"]),
-        ]
-        for lbl, val in stats:
-            col = QVBoxLayout()
-            col.setSpacing(0)
-            l = QLabel(lbl)
-            l.setObjectName("overviewSub")
-            v = QLabel(val)
-            v.setObjectName("overviewValue")
-            v.setStyleSheet("font-size: 14px; font-weight: 700; color: white;")
-            col.addWidget(l)
-            col.addWidget(v)
-            bottom.addLayout(col)
-        bottom.addStretch()
-        outer.addLayout(bottom)
-
-        return card
-
-    def _buckets_section(self):
-        section = QWidget()
-        section.setObjectName("contentArea")
-        v = QVBoxLayout(section)
-        v.setContentsMargins(0, 0, 0, 0)
-        v.setSpacing(12)
-
-        hdr = QHBoxLayout()
-        title = QLabel("Fund Bucket Utilization")
-        title.setObjectName("sectionHeader")
-        hdr.addWidget(title)
-        hdr.addStretch()
-        v.addLayout(hdr)
-
-        # Chart card
-        chart_card = QWidget()
-        chart_card.setObjectName("statCard")
-        chart_card.setMinimumHeight(160)
-        cl = QVBoxLayout(chart_card)
-        cl.setContentsMargins(18, 16, 18, 16)
-
-        chart = BudgetBarChart(self.MOCK["buckets"])
-        cl.addWidget(chart)
-        v.addWidget(chart_card)
-
-        # Three bucket cards in a row
-        row = QHBoxLayout()
-        row.setSpacing(14)
-        bucket_cards = [
-            ("🎉", "Events Fund",       "₱11,200 / ₱15,000", 75, "75%", "Active",   "purple"),
-            ("📝", "Supplies Fund",      "₱3,400 / ₱5,000",   68, "68%", "Active",   "pink"),
-            ("⚙️", "Operations Fund",    "₱1,800 / ₱3,000",   60, "60%", "Active",   "green"),
-        ]
-        for icon, title_t, sub, prog, prog_lbl, days, color in bucket_cards:
-            bc = self._bucket_card(icon, title_t, sub, prog, prog_lbl, days, color)
-            row.addWidget(bc)
-        v.addLayout(row)
-
-        return section
-
-    def _bucket_card(self, icon, title, subtitle, progress, prog_lbl, badge, color):
-        card = QWidget()
-        card.setObjectName("bucketCard")
-        card.setMinimumHeight(145)
-        v = QVBoxLayout(card)
-        v.setContentsMargins(16, 14, 16, 14)
-        v.setSpacing(4)
-
-        top = QHBoxLayout()
-        icon_l = QLabel(icon)
-        icon_l.setStyleSheet("font-size: 20px;")
-        dots = QLabel("···")
-        dots.setStyleSheet("color: #C5BFEE; font-size: 16px;")
-        top.addWidget(icon_l)
-        top.addStretch()
-        top.addWidget(dots)
-        v.addLayout(top)
-
-        t = QLabel(title)
-        t.setObjectName("bucketTitle")
-        s = QLabel(subtitle)
-        s.setObjectName("bucketSub")
-        v.addWidget(t)
-        v.addWidget(s)
-        v.addStretch()
-
-        prog_row = QHBoxLayout()
-        pl = QLabel("Progress")
-        pl.setObjectName("bucketSub")
-        pv = QLabel(prog_lbl)
-        pv.setStyleSheet("color: #1A1A3E; font-weight: 600; font-size: 11px; font-family:'Segoe UI';")
-        prog_row.addWidget(pl)
-        prog_row.addStretch()
-        prog_row.addWidget(pv)
-        v.addLayout(prog_row)
-
-        bar = QProgressBar()
-        color_map = {"purple": "bucketProgress", "pink": "bucketProgressPink", "green": "bucketProgressGreen"}
-        bar.setObjectName(color_map.get(color, "bucketProgress"))
-        bar.setRange(0, 100)
-        bar.setValue(progress)
-        bar.setTextVisible(False)
-        bar.setFixedHeight(7)
-        v.addWidget(bar)
-
-        badge_colors = {
-            "purple": ("#EDE7F6", "#6C5CE7"),
-            "pink":   ("#FCE4EC", "#C2185B"),
-            "green":  ("#E8F5E9", "#2E7D32"),
-        }
-        bg, fg = badge_colors.get(color, ("#EDE7F6", "#6C5CE7"))
-        b = QLabel(f"  {badge}  ")
-        b.setStyleSheet(
-            f"background:{bg}; color:{fg}; border-radius:8px;"
-            f"padding:2px 6px; font-size:10px; font-family:'Segoe UI';"
-        )
-        b.setAlignment(Qt.AlignmentFlag.AlignRight)
-        v.addWidget(b, alignment=Qt.AlignmentFlag.AlignRight)
-
-        return card
-
-    def _right_panel(self):
-        panel = QWidget()
-        panel.setObjectName("rightPanel")
-        v = QVBoxLayout(panel)
-        v.setContentsMargins(18, 18, 18, 18)
-        v.setSpacing(14)
-
-        # Recent Payments section
-        hdr = QHBoxLayout()
-        title = QLabel("Recent Payments")
-        title.setObjectName("panelTitle")
-        view_all = QPushButton("View All")
-        view_all.setObjectName("viewAllBtn")
-        hdr.addWidget(title)
-        hdr.addStretch()
-        hdr.addWidget(view_all)
-        v.addLayout(hdr)
-
-        for name, sid, amount, status in self.MOCK["recent_payments"]:
-            row = self._payment_row(name, sid, amount, status)
-            v.addWidget(row)
-
-        # Divider
-        line = QFrame()
-        line.setFrameShape(QFrame.Shape.HLine)
-        line.setStyleSheet("color: #EEF0F8;")
-        v.addWidget(line)
-
-        # Collection progress
-        coll_title = QLabel("Collection Progress")
-        coll_title.setObjectName("panelTitle")
-        v.addWidget(coll_title)
-
-        coll_pct = int(18750 / 25000 * 100)
-        coll_bar = QProgressBar()
-        coll_bar.setObjectName("bucketProgress")
-        coll_bar.setRange(0, 100)
-        coll_bar.setValue(coll_pct)
-        coll_bar.setTextVisible(False)
-        coll_bar.setFixedHeight(9)
-        v.addWidget(coll_bar)
-
-        coll_detail = QLabel(f"₱18,750 collected of ₱25,000  ({coll_pct}%)")
-        coll_detail.setObjectName("cardLabel")
-        coll_detail.setWordWrap(True)
-        v.addWidget(coll_detail)
-
-        # Members
-        mem_title = QLabel("Members")
-        mem_title.setObjectName("panelTitle")
-        v.addWidget(mem_title)
-
-        mem_row = QHBoxLayout()
-        for initials, color in [("KT","#6C5CE7"),("JR","#FD79A8"),("MC","#00B894"),("RL","#FDCB6E")]:
-            av = QLabel(initials)
-            av.setFixedSize(32, 32)
-            av.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            av.setStyleSheet(
-                f"background:{color}22; color:{color}; border-radius:16px;"
-                f"font-size:10px; font-weight:700; font-family:'Segoe UI';"
-            )
-            mem_row.addWidget(av)
-        more = QLabel(f"+{self.MOCK['member_count'] - 4}")
-        more.setFixedSize(32, 32)
-        more.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        more.setStyleSheet(
-            "background:#EEF0F8; color:#9B9BB0; border-radius:16px;"
-            "font-size:10px; font-family:'Segoe UI';"
-        )
-        mem_row.addWidget(more)
-        mem_row.addStretch()
-        v.addLayout(mem_row)
-
-        v.addStretch()
-        return panel
-
-    def _payment_row(self, name, student_id, amount, status):
-        row = QWidget()
-        row.setObjectName("studentRow")
-        h = QHBoxLayout(row)
-        h.setContentsMargins(4, 4, 4, 4)
-        h.setSpacing(10)
-
-        # Avatar
-        initials = "".join(w[0] for w in name.split()[:2]).upper()
-        av = QLabel(initials)
-        av.setFixedSize(32, 32)
-        av.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        av.setStyleSheet(
-            "background:#EDE7F6; color:#6C5CE7; border-radius:16px;"
-            "font-size:10px; font-weight:700; font-family:'Segoe UI';"
-        )
-
-        info = QVBoxLayout()
-        info.setSpacing(0)
-        n = QLabel(name)
-        n.setObjectName("studentName")
-        sid = QLabel(student_id)
-        sid.setObjectName("studentDetail")
-        info.addWidget(n)
-        info.addWidget(sid)
-
-        badge_map = {
-            "Paid":    ("badgePaid",    "#E8F5E9", "#2E7D32"),
-            "Pending": ("badgePending", "#FFF3E0", "#E65100"),
-        }
-        _, bg, fg = badge_map.get(status, ("badgePaid", "#EDE7F6", "#6C5CE7"))
-        badge = QLabel(status)
-        badge.setStyleSheet(
-            f"background:{bg}; color:{fg}; border-radius:8px;"
-            f"padding:2px 8px; font-size:10px; font-family:'Segoe UI';"
-        )
-
-        amt = QLabel(amount)
-        amt.setStyleSheet("font-size:12px; font-weight:600; color:#1A1A3E; font-family:'Segoe UI';")
-
-        h.addWidget(av)
-        h.addLayout(info)
-        h.addStretch()
-        h.addWidget(amt)
-        h.addWidget(badge)
-        return row
+        for i, b in enumerate(buckets_data):
+            container = QWidget()
+            layout = QVBoxLayout(container)
+            layout.setContentsMargins(0, 0, 0, 10)
+            layout.setSpacing(4)
+            
+            title_row = QHBoxLayout()
+            name = QLabel(b.get("bucket_name", "Unknown"))
+            name.setStyleSheet("color: #1A1A3E; font-weight: 600; font-size: 13px;")
+            
+            spent = float(b.get("spent_amount", 0))
+            planned = float(b.get("planned_amount", 0))
+            percent = int((spent / planned * 100)) if planned > 0 else 0
+            
+            vals = QLabel(f"₱{spent:,.0f} / ₱{planned:,.0f}")
+            vals.setStyleSheet("color: #9B9BB0; font-size: 12px;")
+            
+            title_row.addWidget(name)
+            title_row.addStretch()
+            title_row.addWidget(vals)
+            
+            prog = QProgressBar()
+            base_css = "QProgressBar { border-radius: 4px; background-color: #EEF0F8; border: none; } "
+            prog.setStyleSheet(base_css + colors[i % len(colors)])
+            prog.setTextVisible(False)
+            prog.setFixedHeight(6)
+            prog.setMaximum(100)
+            prog.setValue(min(percent, 100))
+            
+            layout.addLayout(title_row)
+            layout.addWidget(prog)
+            
+            self.buckets_layout.insertWidget(self.buckets_layout.count() - 1, container)

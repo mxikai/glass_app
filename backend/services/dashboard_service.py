@@ -4,6 +4,7 @@ from models.budget_item_model import BudgetItem
 from models.fund_bucket_model import FundBucket
 from models.inventory_model import InventoryItem
 from models.transaction_model import Transaction
+from models.student_model import Student
 from utils.db import session_scope
 from services.workflow_helpers import (
     is_official_transaction,
@@ -38,10 +39,12 @@ def get_dashboard_summary(plan_id: int | None = None) -> dict:
         payment_total = sum((money_float(row.amount) for row in payments), 0.0)
         expense_total = sum((money_float(row.amount) for row in expenses), 0.0)
 
-        paid_student_ids = sorted({row.student_id for row in payments if row.student_id})
-        plan_student_ids = sorted(student.student_id for student in plan.students)
-        pending_student_ids = [student_id for student_id in plan_student_ids if student_id not in paid_student_ids]
-
+        paid_student_ids = sorted(list({row.student_id for row in payments if row.student_id}))
+        active_students = session.query(Student).filter(Student.status.notin_(["Inactive", "Alumni"])).all()
+        active_student_ids = [s.student_id for s in active_students]
+        
+        pending_student_ids = [s_id for s_id in active_student_ids if s_id not in paid_student_ids]
+        
         running_balance = 0.0
         cash_flow = []
         for transaction in official_transactions:
