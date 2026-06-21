@@ -16,11 +16,20 @@ QWidget#sidebar {
 QPushButton#navBtn {
     background-color: transparent;
     border: none;
+    outline: none; /* Kills the click outline */
     color: rgba(255, 255, 255, 0.6);
     font-size: 22px;
     padding: 14px 0px;
-    border-radius: 12px;
-    margin: 4px 8px;
+    margin: 4px -2px 4px 12px; 
+    border-top-left-radius: 20px;
+    border-bottom-left-radius: 20px;
+    border-top-right-radius: 0px;
+    border-bottom-right-radius: 0px;
+}
+
+QPushButton#navBtn:focus {
+    outline: none; /* Double-tap to ensure no focus artifact */
+    border: none;
 }
 
 QPushButton#navBtn:hover {
@@ -29,8 +38,8 @@ QPushButton#navBtn:hover {
 }
 
 QPushButton#navBtn:checked {
-    background-color: rgba(255, 255, 255, 0.22);
-    color: white;
+    background-color: #EEF0F8; 
+    color: #6C5CE7;            
 }
 
 /* --- Main Content Area --- */

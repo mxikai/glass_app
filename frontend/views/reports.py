@@ -60,6 +60,13 @@ class ReportsView(QWidget):
         left_col.addWidget(title)
         left_col.addWidget(subtitle)
 
+        # --- THE FIX: White Card Wrapper for Controls ---
+        self.left_card = QFrame()
+        self.left_card.setObjectName("profilePanel") # Triggers the white card styling from theme.qss
+        left_card_layout = QVBoxLayout(self.left_card)
+        left_card_layout.setContentsMargins(24, 24, 24, 24)
+        left_card_layout.setSpacing(16)
+
         # Plan Selector
         self.lbl_plan = QLabel("Select Budget Plan:")
         self.lbl_plan.setStyleSheet("font-weight: 700; color: #1A1A3E; font-size: 14px; font-family: 'Segoe UI';")
@@ -68,18 +75,12 @@ class ReportsView(QWidget):
         self.input_plan.setObjectName("formInput")
         self.input_plan.currentIndexChanged.connect(self.refresh_preview)
         
-        left_col.addWidget(self.lbl_plan)
-        left_col.addWidget(self.input_plan)
+        left_card_layout.addWidget(self.lbl_plan)
+        left_card_layout.addWidget(self.input_plan)
 
         # Report Type List
         self.lbl_type = QLabel("Select Report Type:")
         self.lbl_type.setStyleSheet("font-weight: 700; color: #1A1A3E; font-size: 14px; font-family: 'Segoe UI'; margin-top: 12px;")
-        
-        # Wrapping list in the modernTable frame for the white background + rounded corners
-        list_container = QFrame()
-        list_container.setObjectName("modernTable") 
-        list_layout = QVBoxLayout(list_container)
-        list_layout.setContentsMargins(8, 8, 8, 8)
         
         self.list_reports = QListWidget()
         self.list_reports.setStyleSheet("""
@@ -114,11 +115,10 @@ class ReportsView(QWidget):
         self.list_reports.setCurrentRow(0)
         self.list_reports.itemSelectionChanged.connect(self.refresh_preview)
         
-        list_layout.addWidget(self.list_reports)
+        left_card_layout.addWidget(self.lbl_type)
+        left_card_layout.addWidget(self.list_reports)
         
-        left_col.addWidget(self.lbl_type)
-        left_col.addWidget(list_container)
-        left_col.addStretch() 
+        left_col.addWidget(self.left_card, stretch=1)
         
         # ==========================================
         # RIGHT COLUMN (Preview & Export Panel)

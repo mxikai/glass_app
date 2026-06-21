@@ -84,7 +84,7 @@ class BudgetPlanView(QWidget):
         # ==========================================
         self.right_panel = QFrame()
         self.right_panel.setObjectName("profilePanel")
-        self.right_panel.setFixedWidth(340) # Keep it wide enough for the sync button
+        self.right_panel.setFixedWidth(400)
         
         panel_layout = QVBoxLayout(self.right_panel)
         panel_layout.setContentsMargins(24, 32, 24, 32)

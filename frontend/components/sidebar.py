@@ -5,8 +5,8 @@ from PyQt6.QtGui import QFont
 
 NAV_ITEMS = [
     ("🏠", "Dashboard",    "dashboard"),
-    ("📋", "Budget Plans", "budget"),
     ("👥", "Students",     "students"),
+    ("📋", "Budget Plans", "budget"),
     ("💳", "Transactions", "transactions"),
     ("📦", "Inventory",    "inventory"),
     ("📊", "Reports",      "reports"),
@@ -19,6 +19,7 @@ class Sidebar(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("sidebar")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setFixedWidth(70)
 
         layout = QVBoxLayout(self)
@@ -53,7 +54,7 @@ class Sidebar(QWidget):
         avatar.setStyleSheet(
             "background-color: rgba(255,255,255,0.25); color: white;"
             "border-radius: 18px; font-size: 11px; font-weight: 700;"
-            "font-family: 'Segoe UI'; margin: 0 17px;"
+            "font-family: 'Segoe UI';" 
         )
         layout.addWidget(avatar, alignment=Qt.AlignmentFlag.AlignHCenter)
 

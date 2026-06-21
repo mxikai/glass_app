@@ -66,8 +66,8 @@ class MainWindow(QMainWindow):
         # Register pages in the same order as NAV_ITEMS
         self._pages = {
             "dashboard":    DashboardView(),
-            "budget":       BudgetPlanView(),
             "students":     StudentsView(),
+            "budget":       BudgetPlanView(),
             "transactions": TransactionsView(),
             "inventory":    InventoryView(),
             "reports":      ReportsView(),

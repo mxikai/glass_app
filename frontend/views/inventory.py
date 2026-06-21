@@ -65,7 +65,6 @@ class InventoryView(QWidget):
             "ID", "Source", "Item Name", "Qty", "Cost", "Condition", "Status", "Date Recorded"
         ])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        # Resize smaller columns tightly
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
         
@@ -82,7 +81,7 @@ class InventoryView(QWidget):
         # ==========================================
         self.right_panel = QFrame()
         self.right_panel.setObjectName("profilePanel")
-        self.right_panel.setFixedWidth(380) 
+        self.right_panel.setFixedWidth(400) 
         
         panel_layout = QVBoxLayout(self.right_panel)
         panel_layout.setContentsMargins(24, 32, 24, 32)
@@ -102,13 +101,13 @@ class InventoryView(QWidget):
         self.input_id.setPlaceholderText("Auto-generated")
         self.input_id.setStyleSheet("background-color: #F5F6FA; color: #9B9BB0;")
         
-        # New Source logic mapped to backend updates
         self.input_source = QComboBox()
         self.input_source.addItems(["Purchase", "Legacy"])
         self.input_source.currentTextChanged.connect(self.on_source_changed)
 
         self.lbl_txn = QLabel("Expense Txn *")
         self.input_txn = QComboBox()
+        self.input_txn.currentIndexChanged.connect(self.on_txn_selected)
         
         self.lbl_note = QLabel("Source Note *")
         self.input_note = QLineEdit()
@@ -123,7 +122,6 @@ class InventoryView(QWidget):
         self.input_cost.setRange(0, 9999999.99)
         self.input_cost.setPrefix("₱ ")
         
-        # Exact values from your PDF framework
         self.input_condition = QComboBox()
         self.input_condition.addItems(["New", "Good", "Fair", "Damaged"])
         
@@ -134,7 +132,6 @@ class InventoryView(QWidget):
         self.input_date.setPlaceholderText("YYYY-MM-DD")
         self.input_date.setText(str(date.today()))
 
-        # Apply CSS styling
         for inp in [self.input_id, self.input_source, self.input_txn, self.input_note, 
                     self.input_name, self.input_qty, self.input_cost, self.input_condition, 
                     self.input_status, self.input_date]:
@@ -180,12 +177,9 @@ class InventoryView(QWidget):
         self.on_source_changed("Purchase")
 
     def on_source_changed(self, source_type):
-        """Morphs the form depending on Purchase vs Legacy."""
         is_purchase = (source_type == "Purchase")
-        
         self.lbl_txn.setVisible(is_purchase)
         self.input_txn.setVisible(is_purchase)
-        
         self.lbl_note.setVisible(not is_purchase)
         self.input_note.setVisible(not is_purchase)
 
@@ -194,8 +188,6 @@ class InventoryView(QWidget):
         try:
             self.inventory_data = list_inventory_items()
             all_transactions = list_transactions()
-            
-            # Inventory items can ONLY be tied to Expenses
             self.expense_txns = [t for t in all_transactions if t.get("transaction_type") == "EXPENSE"]
             
             self.populate_dropdowns()
@@ -204,19 +196,48 @@ class InventoryView(QWidget):
             QMessageBox.warning(self, "Data Error", f"Could not load data: {e}")
 
     def populate_dropdowns(self):
-        curr_txn = self.input_txn.currentData()
+        curr_txn_data = self.input_txn.currentData()
         
+        self.input_txn.blockSignals(True)
         self.input_txn.clear()
+        self.input_txn.addItem("-- Select Expense Item --", None)
+        
         for tx in self.expense_txns:
-            if isinstance(tx, dict):
-                label = f"Txn #{tx.get('transaction_id')} - ₱{float(tx.get('amount') or 0):,.2f}"
-                self.input_txn.addItem(label, tx.get("transaction_id"))
-                
-        # Restore selection if it existed
-        if curr_txn:
-            idx = self.input_txn.findData(curr_txn)
-            if idx >= 0:
-                self.input_txn.setCurrentIndex(idx)
+            txn_id = tx.get("transaction_id")
+            line_items = tx.get("line_items", [])
+            
+            if not line_items:
+                label = f"Txn #{txn_id} - ₱{float(tx.get('amount') or 0):,.2f}"
+                self.input_txn.addItem(label, (txn_id, None, "", 1, 0.0))
+            else:
+                for li in line_items:
+                    li_id = li.get("line_item_id")
+                    name = li.get("item_name", "")
+                    qty = li.get("quantity", 1)
+                    cost = float(li.get("unit_cost") or 0.0)
+                    
+                    label = f"Txn #{txn_id}: {name} (x{qty})"
+                    self.input_txn.addItem(label, (txn_id, li_id, name, qty, cost))
+                    
+        if curr_txn_data:
+            for i in range(self.input_txn.count()):
+                if self.input_txn.itemData(i) == curr_txn_data:
+                    self.input_txn.setCurrentIndex(i)
+                    break
+                    
+        self.input_txn.blockSignals(False)
+
+    def on_txn_selected(self, index):
+        if index < 0: return
+        data = self.input_txn.itemData(index)
+        if data:
+            txn_id, li_id, name, qty, cost = data
+            if name:
+                self.input_name.setText(name)
+            if qty:
+                self.input_qty.setValue(int(qty))
+            if cost:
+                self.input_cost.setValue(float(cost))
 
     def refresh_table(self):
         self.table.setRowCount(0) 
@@ -258,9 +279,27 @@ class InventoryView(QWidget):
             self.input_id.setText(str(target_item.get("inventory_item_id", "")))
             self.input_source.setCurrentText(target_item.get("source_type", "Purchase"))
             
-            idx_txn = self.input_txn.findData(target_item.get("transaction_id"))
-            if idx_txn >= 0: 
+            target_txn_id = target_item.get("transaction_id")
+            target_li_id = target_item.get("expense_line_item_id")
+            
+            self.input_txn.blockSignals(True)
+            idx_txn = -1
+            for i in range(self.input_txn.count()):
+                data = self.input_txn.itemData(i)
+                if data and data[0] == target_txn_id and data[1] == target_li_id:
+                    idx_txn = i
+                    break
+            
+            if idx_txn == -1 and target_txn_id: 
+                for i in range(self.input_txn.count()):
+                    data = self.input_txn.itemData(i)
+                    if data and data[0] == target_txn_id:
+                        idx_txn = i
+                        break
+                        
+            if idx_txn >= 0:
                 self.input_txn.setCurrentIndex(idx_txn)
+            self.input_txn.blockSignals(False)
                 
             self.input_note.setText(target_item.get("source_note", ""))
             self.input_name.setText(target_item.get("item_name", ""))
@@ -276,7 +315,7 @@ class InventoryView(QWidget):
         self.current_item_id = None
         self.input_id.clear()
         self.input_source.setCurrentIndex(0)
-        self.input_txn.setCurrentIndex(-1)
+        self.input_txn.setCurrentIndex(0)
         self.input_note.clear()
         self.input_name.clear()
         self.input_qty.setValue(1)
@@ -288,11 +327,14 @@ class InventoryView(QWidget):
 
     def save_item(self):
         source_type = self.input_source.currentText()
-        txn_id = self.input_txn.currentData()
+        
+        txn_data = self.input_txn.currentData()
+        txn_id = txn_data[0] if txn_data else None
+        li_id = txn_data[1] if txn_data else None
+        
         name = self.input_name.text().strip()
         note = self.input_note.text().strip()
         
-        # Validations enforcing the backend logic
         if source_type == "Purchase" and not txn_id:
             QMessageBox.warning(self, "Validation Error", "You must select a source Expense Transaction.")
             return
@@ -306,6 +348,7 @@ class InventoryView(QWidget):
         data = {
             "source_type": source_type,
             "transaction_id": txn_id if source_type == "Purchase" else None,
+            "expense_line_item_id": li_id if source_type == "Purchase" else None,
             "source_note": note if source_type == "Legacy" else "",
             "item_name": name,
             "quantity": self.input_qty.value(),
