@@ -9,13 +9,18 @@ from utils.db import Base
 
 
 class ExpenseLineItem(Base):
-    __tablename__ = "expense_line_items"
+    __tablename__ = "ExpenseLineItem"
 
-    line_item_id = Column(Integer, primary_key=True, autoincrement=True)
-    transaction_id = Column(Integer, ForeignKey("transactions.transaction_id"), nullable=False)
-    item_name = Column(String(120), nullable=False)
-    quantity = Column(Integer, nullable=False, default=1)
-    unit_cost = Column(Numeric(12, 2), nullable=False)
+    line_item_id = Column("LineItemID", Integer, primary_key=True, autoincrement=True)
+    transaction_id = Column(
+        "TransactionID",
+        Integer,
+        ForeignKey("TransactionRecord.TransactionID"),
+        nullable=False,
+    )
+    item_name = Column("ItemName", String(120), nullable=False)
+    quantity = Column("Quantity", Integer, nullable=False, default=1)
+    unit_cost = Column("UnitCost", Numeric(12, 2), nullable=False)
 
     transaction = relationship("Transaction", back_populates="expense_line_items")
     inventory_items = relationship("InventoryItem", back_populates="expense_line_item")

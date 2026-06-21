@@ -107,6 +107,49 @@ class IsolatedDatabaseTestCase(unittest.TestCase):
 
 
 class ValidatorTests(IsolatedDatabaseTestCase):
+    def test_created_schema_uses_base_physical_names(self) -> None:
+        connection = sqlite3.connect(db.DATABASE_PATH)
+        try:
+            tables = {
+                row[0]
+                for row in connection.execute(
+                    "SELECT name FROM sqlite_master WHERE type = 'table'"
+                ).fetchall()
+            }
+            self.assertIn("Student", tables)
+            self.assertIn("BudgetPlan", tables)
+            self.assertIn("BudgetPlanStudent", tables)
+            self.assertIn("FundBucket", tables)
+            self.assertIn("BudgetItem", tables)
+            self.assertIn("TransactionRecord", tables)
+            self.assertIn("ExpenseLineItem", tables)
+            self.assertIn("InventoryItem", tables)
+
+            transaction_columns = {
+                row[1]
+                for row in connection.execute("PRAGMA table_info(TransactionRecord)").fetchall()
+            }
+            inventory_columns = {
+                row[1]
+                for row in connection.execute("PRAGMA table_info(InventoryItem)").fetchall()
+            }
+            plan_student_columns = {
+                row[1]
+                for row in connection.execute("PRAGMA table_info(BudgetPlanStudent)").fetchall()
+            }
+        finally:
+            connection.close()
+
+        self.assertIn("ApprovedByStudentID", transaction_columns)
+        self.assertIn("CurrentHash", transaction_columns)
+        self.assertIn("PreviousHash", transaction_columns)
+        self.assertIn("PurchaseTransactionID", inventory_columns)
+        self.assertIn("ExpenseLineItemID", inventory_columns)
+        self.assertIn("SourceType", inventory_columns)
+        self.assertIn("SourceNote", inventory_columns)
+        self.assertIn("DateIncluded", plan_student_columns)
+        self.assertIn("FeeStatus", plan_student_columns)
+
     def test_student_id_format_is_exact(self) -> None:
         self.assertEqual(student_id_value("2024-0001"), "2024-0001")
         for value in ["2024-00001", "2024-001", "S-1001", "2024-ABCD", "20240001"]:
@@ -653,15 +696,30 @@ class ServiceValidationTests(IsolatedDatabaseTestCase):
             db.init_db()
             connection = sqlite3.connect(old_path)
             line_item = connection.execute(
-                "SELECT item_name, quantity, unit_cost FROM expense_line_items WHERE transaction_id = 1"
+                "SELECT ItemName, Quantity, UnitCost FROM ExpenseLineItem WHERE TransactionID = 1"
             ).fetchone()
             inventory_columns = {
                 row[1]: row[3]
-                for row in connection.execute("PRAGMA table_info(inventory_items)").fetchall()
+                for row in connection.execute("PRAGMA table_info(InventoryItem)").fetchall()
             }
             inventory = connection.execute(
-                "SELECT source_type, transaction_id FROM inventory_items WHERE inventory_item_id = 1"
+                "SELECT SourceType, PurchaseTransactionID FROM InventoryItem WHERE InventoryItemID = 1"
             ).fetchone()
+            plan_student_columns = {
+                row[1]
+                for row in connection.execute("PRAGMA table_info(BudgetPlanStudent)").fetchall()
+            }
+            old_tables = {
+                row[0]
+                for row in connection.execute(
+                    """
+                    SELECT name
+                    FROM sqlite_master
+                    WHERE type = 'table'
+                        AND name IN ('students', 'budget_plans', 'transactions', 'inventory_items')
+                    """
+                ).fetchall()
+            }
             connection.close()
         finally:
             if db._engine is not None:
@@ -672,9 +730,12 @@ class ServiceValidationTests(IsolatedDatabaseTestCase):
             db._SessionLocal = original_session
 
         self.assertEqual(line_item, ("Supplies", 1, 75))
-        self.assertIn("source_type", inventory_columns)
-        self.assertFalse(bool(inventory_columns["transaction_id"]))
+        self.assertIn("SourceType", inventory_columns)
+        self.assertFalse(bool(inventory_columns["PurchaseTransactionID"]))
         self.assertEqual(inventory, ("Purchase", 1))
+        self.assertIn("DateIncluded", plan_student_columns)
+        self.assertIn("FeeStatus", plan_student_columns)
+        self.assertEqual(old_tables, set())
 
 
 if __name__ == "__main__":

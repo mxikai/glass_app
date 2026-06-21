@@ -7,13 +7,13 @@ from utils.db import Base
 
 
 class FundBucket(Base):
-    __tablename__ = "fund_buckets"
+    __tablename__ = "FundBucket"
 
-    bucket_id = Column(Integer, primary_key=True, autoincrement=True)
-    plan_id = Column(Integer, ForeignKey("budget_plans.plan_id"), nullable=False)
-    bucket_name = Column(String(120), nullable=False)
-    planned_amount = Column(Numeric(12, 2), nullable=False)
-    description = Column(String(255))
+    bucket_id = Column("BucketID", Integer, primary_key=True, autoincrement=True)
+    plan_id = Column("PlanID", Integer, ForeignKey("BudgetPlan.PlanID"), nullable=False)
+    bucket_name = Column("BucketName", String(120), nullable=False)
+    planned_amount = Column("PlannedAmount", Numeric(12, 2), nullable=False)
+    description = Column("Description", String(255))
 
     budget_plan = relationship("BudgetPlan", back_populates="fund_buckets")
     budget_items = relationship("BudgetItem", back_populates="fund_bucket", cascade="all, delete-orphan")

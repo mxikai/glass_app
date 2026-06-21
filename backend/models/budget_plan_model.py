@@ -1,30 +1,40 @@
 from __future__ import annotations
 
-from sqlalchemy import Column, Date, ForeignKey, Integer, Numeric, String, Table
+from datetime import date
+
+from sqlalchemy import Column, Date, ForeignKey, Integer, Numeric, String, Table, text
 from sqlalchemy.orm import relationship
 
 from utils.db import Base
 
 budget_plan_students = Table(
-    "budget_plan_students",
+    "BudgetPlanStudent",
     Base.metadata,
-    Column("plan_id", ForeignKey("budget_plans.plan_id"), primary_key=True),
-    Column("student_id", ForeignKey("students.student_id"), primary_key=True),
+    Column("PlanID", ForeignKey("BudgetPlan.PlanID"), primary_key=True),
+    Column("StudentID", ForeignKey("Student.StudentID"), primary_key=True),
+    Column(
+        "DateIncluded",
+        Date,
+        nullable=False,
+        default=date.today,
+        server_default=text("CURRENT_DATE"),
+    ),
+    Column("FeeStatus", String(10), nullable=False, default="Pending", server_default="Pending"),
 )
 
 
 class BudgetPlan(Base):
-    __tablename__ = "budget_plans"
+    __tablename__ = "BudgetPlan"
 
-    plan_id = Column(Integer, primary_key=True, autoincrement=True)
-    academic_year = Column(String(20), nullable=False)
-    semester = Column(String(20), nullable=False)
-    total_planned_budget = Column(Numeric(12, 2), nullable=False)
-    member_count = Column(Integer, nullable=False)
-    semestral_fee_amount = Column(Numeric(12, 2), nullable=False)
-    approval_status = Column(String(20), default="Pending")
-    approved_date = Column(Date)
-    status = Column(String(20), default="Active")
+    plan_id = Column("PlanID", Integer, primary_key=True, autoincrement=True)
+    academic_year = Column("AcademicYear", String(20), nullable=False)
+    semester = Column("Semester", String(20), nullable=False)
+    total_planned_budget = Column("TotalPlannedBudget", Numeric(12, 2), nullable=False)
+    member_count = Column("MemberCount", Integer, nullable=False)
+    semestral_fee_amount = Column("SemestralFeeAmount", Numeric(12, 2), nullable=False)
+    approval_status = Column("ApprovalStatus", String(20), default="Pending")
+    approved_date = Column("ApprovedDate", Date)
+    status = Column("Status", String(20), default="Active")
 
     students = relationship("Student", secondary=budget_plan_students, back_populates="budget_plans")
     fund_buckets = relationship("FundBucket", back_populates="budget_plan", cascade="all, delete-orphan")

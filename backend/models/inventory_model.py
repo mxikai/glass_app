@@ -9,19 +9,27 @@ from utils.db import Base
 
 
 class InventoryItem(Base):
-    __tablename__ = "inventory_items"
+    __tablename__ = "InventoryItem"
 
-    inventory_item_id = Column(Integer, primary_key=True, autoincrement=True)
-    transaction_id = Column(Integer, ForeignKey("transactions.transaction_id"))
-    expense_line_item_id = Column(Integer, ForeignKey("expense_line_items.line_item_id"))
-    item_name = Column(String(120), nullable=False)
-    quantity = Column(Integer, default=1)
-    unit_cost = Column(Numeric(12, 2))
-    item_condition = Column(String(50))
-    source_type = Column(String(20), default="Purchase")
-    source_note = Column(Text)
-    status = Column(String(20), default="Active")
-    date_recorded = Column(Date, default=date.today)
+    inventory_item_id = Column("InventoryItemID", Integer, primary_key=True, autoincrement=True)
+    transaction_id = Column(
+        "PurchaseTransactionID",
+        Integer,
+        ForeignKey("TransactionRecord.TransactionID"),
+    )
+    expense_line_item_id = Column(
+        "ExpenseLineItemID",
+        Integer,
+        ForeignKey("ExpenseLineItem.LineItemID"),
+    )
+    item_name = Column("ItemName", String(120), nullable=False)
+    quantity = Column("Quantity", Integer, default=1)
+    unit_cost = Column("UnitCost", Numeric(12, 2))
+    item_condition = Column("ItemCondition", String(50))
+    source_type = Column("SourceType", String(20), default="Purchase")
+    source_note = Column("SourceNote", Text)
+    status = Column("Status", String(20), default="Active")
+    date_recorded = Column("DateRecorded", Date, default=date.today)
 
     transaction = relationship("Transaction", back_populates="inventory_items")
     expense_line_item = relationship("ExpenseLineItem", back_populates="inventory_items")

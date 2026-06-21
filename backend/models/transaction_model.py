@@ -10,23 +10,23 @@ from utils.db import Base
 
 
 class Transaction(Base):
-    __tablename__ = "transactions"
+    __tablename__ = "TransactionRecord"
 
-    transaction_id = Column(Integer, primary_key=True, autoincrement=True)
-    plan_id = Column(Integer, ForeignKey("budget_plans.plan_id"), nullable=False)
-    student_id = Column(String(32), ForeignKey("students.student_id"))
-    approver_id = Column(String(32), ForeignKey("students.student_id"))
-    budget_item_id = Column(Integer, ForeignKey("budget_items.budget_item_id"))
-    amount = Column(Numeric(12, 2), nullable=False)
-    transaction_type = Column(String(20), nullable=False)
-    transaction_status = Column(String(20), default="Active")
-    approval_status = Column(String(20), default="Pending")
-    transaction_date = Column(DateTime, default=datetime.utcnow)
-    notes = Column(Text)
-    receipt_path = Column(String(255))
-    amount_override_reason = Column(Text)
-    current_hash = Column(String(64))
-    previous_hash = Column(String(64))
+    transaction_id = Column("TransactionID", Integer, primary_key=True, autoincrement=True)
+    plan_id = Column("PlanID", Integer, ForeignKey("BudgetPlan.PlanID"), nullable=False)
+    student_id = Column("StudentID", String(32), ForeignKey("Student.StudentID"))
+    approver_id = Column("ApprovedByStudentID", String(32), ForeignKey("Student.StudentID"))
+    budget_item_id = Column("BudgetItemID", Integer, ForeignKey("BudgetItem.BudgetItemID"))
+    amount = Column("Amount", Numeric(12, 2), nullable=False)
+    transaction_type = Column("TransactionType", String(20), nullable=False)
+    transaction_status = Column("TransactionStatus", String(20), default="Active")
+    approval_status = Column("ApprovalStatus", String(20), default="Pending")
+    transaction_date = Column("TransactionDate", DateTime, default=datetime.utcnow)
+    notes = Column("Notes", Text)
+    receipt_path = Column("ReceiptPath", String(255))
+    amount_override_reason = Column("AmountOverrideReason", Text)
+    current_hash = Column("CurrentHash", String(64))
+    previous_hash = Column("PreviousHash", String(64))
 
     budget_plan = relationship("BudgetPlan", back_populates="transactions")
     student = relationship("Student", foreign_keys=[student_id], back_populates="payment_transactions")

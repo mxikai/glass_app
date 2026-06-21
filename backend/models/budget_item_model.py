@@ -7,14 +7,14 @@ from utils.db import Base
 
 
 class BudgetItem(Base):
-    __tablename__ = "budget_items"
+    __tablename__ = "BudgetItem"
 
-    budget_item_id = Column(Integer, primary_key=True, autoincrement=True)
-    bucket_id = Column(Integer, ForeignKey("fund_buckets.bucket_id"), nullable=False)
-    item_name = Column(String(120), nullable=False)
-    item_type = Column(String(50))
-    planned_amount = Column(Numeric(12, 2), nullable=False)
-    description = Column(String(255))
+    budget_item_id = Column("BudgetItemID", Integer, primary_key=True, autoincrement=True)
+    bucket_id = Column("BucketID", Integer, ForeignKey("FundBucket.BucketID"), nullable=False)
+    item_name = Column("ItemName", String(120), nullable=False)
+    item_type = Column("ItemType", String(50))
+    planned_amount = Column("PlannedAmount", Numeric(12, 2), nullable=False)
+    description = Column("Description", String(255))
 
     fund_bucket = relationship("FundBucket", back_populates="budget_items")
     transactions = relationship("Transaction", back_populates="budget_item")
