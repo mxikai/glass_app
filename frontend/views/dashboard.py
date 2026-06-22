@@ -41,8 +41,6 @@ class MiniChart(QWidget):
 
         # Grab the running balance amounts from the backend
         values = [float(point.get('amount', 0)) for point in self.data]
-        
-        # ALWAYS anchor the chart at 0.0 (the starting balance before any transactions)
         values.insert(0, 0.0)
         
         # If there are no real transactions yet, draw a flat baseline
@@ -70,7 +68,7 @@ class MiniChart(QWidget):
             x2 = i * step_x
             y2 = height - ((values[i] - min_val) / val_range * (height - 30)) - 15
 
-            # Smooth cubic bezier curve logic
+            # Cubic bezier curve logic
             ctrl1_x = x1 + (x2 - x1) / 2
             ctrl1_y = y1
             ctrl2_x = x1 + (x2 - x1) / 2
@@ -95,7 +93,7 @@ class DashboardView(QWidget):
         self.setup_ui()
         self.load_plans()
         
-        # Silent Background Auto-Sync
+        # Auto-Sync
         self.sync_timer = QTimer(self)
         self.sync_timer.timeout.connect(self.refresh_dashboard)
         self.sync_timer.start(3000) 
@@ -346,7 +344,6 @@ class DashboardView(QWidget):
             self.lbl_in_val.setText(f"₱ {float(totals.get('payments', 0)):,.2f}")
             self.lbl_out_val.setText(f"₱ {float(totals.get('expenses', 0)):,.2f}")
             
-            # Trust the backend! Pass the precise cash flow right to the chart.
             backend_cash_flow = data.get("cash_flow", [])
             self.chart.update_data(backend_cash_flow)
 
@@ -373,8 +370,6 @@ class DashboardView(QWidget):
             print(f"Dashboard Sync Error: {e}")
 
     def update_recent_transactions(self, transactions, current_plan_id):
-        # The Recent Activity table shows ALL transactions (even Pending) 
-        # so you can see what needs to be approved!
         plan_txns = [t for t in transactions if str(t.get('plan_id')) == str(current_plan_id)]
         recent = sorted(plan_txns, key=lambda x: x.get('transaction_id', 0), reverse=True)[:8]
         

@@ -24,7 +24,6 @@ class ReportsView(QWidget):
         
         self.plans_data = []
         
-        # Map list UI labels to backend report_types
         self.report_types = {
             "Transparency Summary": "transparency",
             "Budget Plan Details": "budget-plan",
@@ -60,9 +59,8 @@ class ReportsView(QWidget):
         left_col.addWidget(title)
         left_col.addWidget(subtitle)
 
-        # --- THE FIX: White Card Wrapper for Controls ---
         self.left_card = QFrame()
-        self.left_card.setObjectName("profilePanel") # Triggers the white card styling from theme.qss
+        self.left_card.setObjectName("profilePanel")
         left_card_layout = QVBoxLayout(self.left_card)
         left_card_layout.setContentsMargins(24, 24, 24, 24)
         left_card_layout.setSpacing(16)
@@ -146,7 +144,7 @@ class ReportsView(QWidget):
         
         panel_layout.addLayout(header_layout)
 
-        # The Document Preview Area
+        # Document Preview Area
         self.preview_area = QTextBrowser()
         self.preview_area.setStyleSheet("""
             QTextBrowser {
@@ -259,12 +257,10 @@ class ReportsView(QWidget):
             
         html += f"<h2>GLASS Official {title_str}</h2><hr>"
         
-        # Grab plan details wherever they might be in the payload
         plan = data.get("plan", {}) or data.get("budget_plan", {}).get("plan", {})
         if plan:
             html += f"<p><b>Academic Year:</b> {plan.get('academic_year')} &nbsp;|&nbsp; <b>Semester:</b> {plan.get('semester')} &nbsp;|&nbsp; <b>Plan ID:</b> {plan.get('plan_id')}</p>"
 
-        # Dynamically build the document based on report type
         if r_type == "transparency":
             html += self._render_summary_boxes(data.get("dashboard_summary", {}))
             html += self._render_budget_plan(data.get("budget_plan", {}))

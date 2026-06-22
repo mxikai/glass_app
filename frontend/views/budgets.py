@@ -240,7 +240,6 @@ class BudgetPlanView(QWidget):
         curr_plan = self.bucket_plan_select.currentData()
         curr_bucket = self.item_bucket_select.currentData()
 
-        # Add explicit Select placeholders
         self.bucket_plan_select.clear()
         self.bucket_plan_select.addItem("-- Select Budget Plan --", None)
         for p in self.plans_data:
@@ -291,7 +290,6 @@ class BudgetPlanView(QWidget):
     def refresh_buckets_table(self):
         self.table_buckets.setRowCount(0)
         
-        # --- THE FIX: UX Empty States ---
         if not self.current_plan_id:
             self.table_buckets.setRowCount(1)
             item = QTableWidgetItem("👈 Please select a Budget Plan in the first tab to view its Fund Buckets.")
@@ -322,7 +320,6 @@ class BudgetPlanView(QWidget):
     def refresh_items_table(self):
         self.table_items.setRowCount(0)
         
-        # --- THE FIX: UX Empty States ---
         if not self.current_bucket_id:
             self.table_items.setRowCount(1)
             item = QTableWidgetItem("👈 Please select a Fund Bucket in the previous tab to view its Budget Items.")

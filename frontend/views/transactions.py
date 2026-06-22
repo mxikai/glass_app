@@ -103,7 +103,6 @@ class TransactionsView(QWidget):
         left_col = QVBoxLayout()
         left_col.setSpacing(16)
         
-        # --- THE FIX: ADDED HEADER LAYOUT WITH FILTER ---
         header_layout = QHBoxLayout()
         title = QLabel("Transaction Ledger")
         title.setObjectName("pageTitle")
@@ -122,7 +121,6 @@ class TransactionsView(QWidget):
         header_layout.addWidget(self.filter_plan_cb)
         
         left_col.addLayout(header_layout)
-        # ------------------------------------------------
 
         self.tabs = QTabWidget()
         self.tabs.setObjectName("modernTabs")
@@ -450,7 +448,6 @@ class TransactionsView(QWidget):
         
         payments = [t for t in self.transactions_data if t.get("transaction_type") == "PAYMENT"]
         
-        # Apply the visual filter
         if filter_plan_id:
             payments = [t for t in payments if t.get("plan_id") == filter_plan_id]
             
