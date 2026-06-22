@@ -1,29 +1,24 @@
 import sys
 import os
 
-frontend_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.abspath(os.path.join(frontend_dir, '..'))
+# --- THE MASTER BRIDGE ---
+project_root = os.path.dirname(os.path.abspath(__file__))
 
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
-if frontend_dir not in sys.path:
-    sys.path.insert(0, frontend_dir)
-    
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 backend_path = os.path.join(project_root, 'backend')
 if backend_path not in sys.path:
     sys.path.insert(0, backend_path)
-    
-from components.sidebar import Sidebar
-from views.dashboard import DashboardView
-from views.students import StudentsView
-from views.budgets import BudgetPlanView
-from views.transactions import TransactionsView
-from views.inventory import InventoryView
-from views.reports import ReportsView
+# -------------------------
+
+from frontend.components.sidebar import Sidebar
+from frontend.views.dashboard import DashboardView
+from frontend.views.students import StudentsView
+from frontend.views.budgets import BudgetPlanView
+from frontend.views.transactions import TransactionsView
+from frontend.views.inventory import InventoryView
+from frontend.views.reports import ReportsView
 
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget,
@@ -40,9 +35,10 @@ class MainWindow(QMainWindow):
         self.resize(1280, 760)
 
         # Load stylesheet
-        qss_path = os.path.join(os.path.dirname(__file__), "styles", "theme.qss")
-        with open(qss_path, "r") as f:
-            self.setStyleSheet(f.read())
+        theme_path = os.path.join(project_root, "frontend", "styles", "theme.qss")
+        if os.path.exists(theme_path):
+            with open(theme_path, "r") as f:
+                self.setStyleSheet(f.read())
 
         # Central widget
         central = QWidget()
