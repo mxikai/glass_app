@@ -30,11 +30,14 @@ class InventoryView(QWidget):
         self.inventory_data = []
         self.expense_txns = []
 
+        # --- PAGINATION TRACKERS ---
+        self.current_page = 1
+        self.items_per_page = 50
+
         self.setup_ui()
         self.load_all_data()
 
     def showEvent(self, event):
-        """Refreshes the data every time the tab is clicked!"""
         super().showEvent(event)
         self.load_all_data()
 
@@ -49,14 +52,32 @@ class InventoryView(QWidget):
         left_col = QVBoxLayout()
         left_col.setSpacing(16)
         
+        # --- HEADER WITH YEAR FILTER ---
+        header_layout = QHBoxLayout()
+        
+        title_layout = QVBoxLayout()
         title = QLabel("Inventory Tracker")
         title.setObjectName("pageTitle")
-        
         subtitle = QLabel("Inventory items are physical assets connected to expense transactions or legacy inherited items.")
         subtitle.setStyleSheet("color: #9B9BB0; font-size: 13px; margin-bottom: 8px;")
         
-        left_col.addWidget(title)
-        left_col.addWidget(subtitle)
+        title_layout.addWidget(title)
+        title_layout.addWidget(subtitle)
+        header_layout.addLayout(title_layout)
+        header_layout.addStretch()
+        
+        lbl_filter = QLabel("Filter by Year:")
+        lbl_filter.setStyleSheet("font-weight: 600; color: #9B9BB0; font-size: 13px; font-family: 'Segoe UI';")
+        self.filter_year_cb = QComboBox()
+        self.filter_year_cb.setObjectName("formInput")
+        self.filter_year_cb.setFixedWidth(120)
+        self.filter_year_cb.currentIndexChanged.connect(self.on_filter_changed)
+        
+        header_layout.addWidget(lbl_filter)
+        header_layout.addWidget(self.filter_year_cb)
+        
+        left_col.addLayout(header_layout)
+        # ------------------------------------
 
         self.table = QTableWidget()
         self.table.setObjectName("modernTable")
@@ -76,6 +97,31 @@ class InventoryView(QWidget):
         
         left_col.addWidget(self.table)
         
+        # --- PAGINATION CONTROLS ---
+        pagination_layout = QHBoxLayout()
+        
+        self.btn_prev = QPushButton("◄ Prev")
+        self.btn_prev.setObjectName("secondaryBtn")
+        self.btn_prev.setFixedWidth(80)
+        self.btn_prev.clicked.connect(self.prev_page)
+        
+        self.lbl_page = QLabel("Page 1 of 1")
+        self.lbl_page.setStyleSheet("color: #9B9BB0; font-weight: bold;")
+        
+        self.btn_next = QPushButton("Next ►")
+        self.btn_next.setObjectName("secondaryBtn")
+        self.btn_next.setFixedWidth(80)
+        self.btn_next.clicked.connect(self.next_page)
+        
+        pagination_layout.addWidget(self.btn_prev)
+        pagination_layout.addStretch()
+        pagination_layout.addWidget(self.lbl_page)
+        pagination_layout.addStretch()
+        pagination_layout.addWidget(self.btn_next)
+        
+        left_col.addLayout(pagination_layout)
+        # ---------------------------
+        
         # ==========================================
         # RIGHT COLUMN (Form Panel)
         # ==========================================
@@ -92,7 +138,6 @@ class InventoryView(QWidget):
         form_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         panel_layout.addWidget(form_title)
         
-        # --- Form Fields ---
         form_layout = QFormLayout()
         form_layout.setVerticalSpacing(12)
         
@@ -151,7 +196,6 @@ class InventoryView(QWidget):
         panel_layout.addLayout(form_layout)
         panel_layout.addStretch()
         
-        # --- Buttons ---
         self.btn_save = QPushButton("Save Inventory Item")
         self.btn_save.setObjectName("primaryBtn")
         self.btn_save.clicked.connect(self.save_item)
@@ -176,6 +220,20 @@ class InventoryView(QWidget):
 
         self.on_source_changed("Purchase")
 
+    # --- Interaction Logic ---
+    def prev_page(self):
+        if self.current_page > 1:
+            self.current_page -= 1
+            self.refresh_table()
+
+    def next_page(self):
+        self.current_page += 1
+        self.refresh_table()
+
+    def on_filter_changed(self):
+        self.current_page = 1 # Reset to page 1 when filter changes!
+        self.refresh_table()
+
     def on_source_changed(self, source_type):
         is_purchase = (source_type == "Purchase")
         self.lbl_txn.setVisible(is_purchase)
@@ -196,8 +254,8 @@ class InventoryView(QWidget):
             QMessageBox.warning(self, "Data Error", f"Could not load data: {e}")
 
     def populate_dropdowns(self):
+        # 1. Populate Expense Transactions
         curr_txn_data = self.input_txn.currentData()
-        
         self.input_txn.blockSignals(True)
         self.input_txn.clear()
         self.input_txn.addItem("-- Select Expense Item --", None)
@@ -224,8 +282,27 @@ class InventoryView(QWidget):
                 if self.input_txn.itemData(i) == curr_txn_data:
                     self.input_txn.setCurrentIndex(i)
                     break
-                    
         self.input_txn.blockSignals(False)
+
+        # 2. Populate the Year Filter
+        self.filter_year_cb.blockSignals(True)
+        current_year = self.filter_year_cb.currentText()
+        self.filter_year_cb.clear()
+        self.filter_year_cb.addItem("All Years", None)
+        
+        years = set()
+        for item in self.inventory_data:
+            date_rec = str(item.get("date_recorded", ""))
+            if len(date_rec) >= 4:
+                years.add(date_rec[:4])
+                
+        for y in sorted(list(years), reverse=True):
+            self.filter_year_cb.addItem(y, y)
+            
+        idx = self.filter_year_cb.findText(current_year)
+        if idx >= 0:
+            self.filter_year_cb.setCurrentIndex(idx)
+        self.filter_year_cb.blockSignals(False)
 
     def on_txn_selected(self, index):
         if index < 0: return
@@ -241,7 +318,28 @@ class InventoryView(QWidget):
 
     def refresh_table(self):
         self.table.setRowCount(0) 
-        for row_idx, item in enumerate(self.inventory_data):
+        
+        filter_year = self.filter_year_cb.currentData()
+        filtered_data = self.inventory_data
+        
+        if filter_year:
+            filtered_data = [item for item in filtered_data if str(item.get("date_recorded", "")).startswith(filter_year)]
+
+        # --- PAGINATION LOGIC ---
+        total_items = len(filtered_data)
+        total_pages = max(1, (total_items + self.items_per_page - 1) // self.items_per_page)
+        if self.current_page > total_pages: self.current_page = max(1, total_pages)
+        
+        self.lbl_page.setText(f"Page {self.current_page} of {total_pages}")
+        self.btn_prev.setEnabled(self.current_page > 1)
+        self.btn_next.setEnabled(self.current_page < total_pages)
+        
+        start_idx = (self.current_page - 1) * self.items_per_page
+        end_idx = start_idx + self.items_per_page
+        page_data = filtered_data[start_idx:end_idx]
+        # ------------------------
+
+        for row_idx, item in enumerate(page_data):
             self.table.insertRow(row_idx)
             
             s_type = str(item.get("source_type", "Purchase"))
@@ -262,7 +360,6 @@ class InventoryView(QWidget):
             clean_date = raw_date[:10] if raw_date else "Unknown"
             self.table.setItem(row_idx, 7, QTableWidgetItem(clean_date))
 
-    # --- Interaction Logic ---
     def on_table_select(self):
         rows = self.table.selectedItems()
         if not rows: return

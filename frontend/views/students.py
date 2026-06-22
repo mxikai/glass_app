@@ -21,6 +21,10 @@ class StudentsView(QWidget):
         self.setObjectName("contentArea")
         self.current_student_id = None 
         
+        # --- PAGINATION TRACKERS ---
+        self.current_page = 1
+        self.items_per_page = 50
+        
         self.setup_ui()
         self.load_data()
 
@@ -29,7 +33,9 @@ class StudentsView(QWidget):
         main_layout.setContentsMargins(28, 24, 28, 24)
         main_layout.setSpacing(24)
 
-        # main table (needs rework) ---------------------------
+        # ==========================================
+        # LEFT COLUMN (Table & Pagination)
+        # ==========================================
         left_col = QVBoxLayout()
         left_col.setSpacing(16)
         
@@ -53,7 +59,34 @@ class StudentsView(QWidget):
         
         left_col.addWidget(self.table)
         
-        # form panel (reworking soon)
+        # --- PAGINATION CONTROLS ---
+        pagination_layout = QHBoxLayout()
+        
+        self.btn_prev = QPushButton("◄ Prev")
+        self.btn_prev.setObjectName("secondaryBtn")
+        self.btn_prev.setFixedWidth(80)
+        self.btn_prev.clicked.connect(self.prev_page)
+        
+        self.lbl_page = QLabel("Page 1 of 1")
+        self.lbl_page.setStyleSheet("color: #9B9BB0; font-weight: bold;")
+        
+        self.btn_next = QPushButton("Next ►")
+        self.btn_next.setObjectName("secondaryBtn")
+        self.btn_next.setFixedWidth(80)
+        self.btn_next.clicked.connect(self.next_page)
+        
+        pagination_layout.addWidget(self.btn_prev)
+        pagination_layout.addStretch()
+        pagination_layout.addWidget(self.lbl_page)
+        pagination_layout.addStretch()
+        pagination_layout.addWidget(self.btn_next)
+        
+        left_col.addLayout(pagination_layout)
+        # ---------------------------
+        
+        # ==========================================
+        # RIGHT COLUMN (Form Panel)
+        # ==========================================
         right_panel = QFrame()
         right_panel.setObjectName("profilePanel")
         right_panel.setFixedWidth(300)
@@ -96,7 +129,6 @@ class StudentsView(QWidget):
         self.input_status = QComboBox()
         self.input_status.addItems(["Active", "Inactive", "Alumni"])
 
-        # styling for inputs
         for inp in [self.input_id, self.input_name, self.input_program, self.input_role, self.input_year, self.input_status]:
             inp.setObjectName("formInput")
 
@@ -111,7 +143,7 @@ class StudentsView(QWidget):
         panel_layout.addLayout(form_layout)
         panel_layout.addStretch()
         
-        # buttons ----------------
+        # buttons
         self.btn_save = QPushButton("Save Student")
         self.btn_save.setObjectName("primaryBtn")
         self.btn_save.clicked.connect(self.save_student)
@@ -134,11 +166,35 @@ class StudentsView(QWidget):
         main_layout.addLayout(left_col, stretch=1)
         main_layout.addWidget(right_panel)
 
+    def prev_page(self):
+        if self.current_page > 1:
+            self.current_page -= 1
+            self.load_data()
+
+    def next_page(self):
+        self.current_page += 1
+        self.load_data()
+
     def load_data(self):
         self.table.setRowCount(0) 
         try:
             students = list_students()
-            for row_idx, student in enumerate(students):
+            
+            # --- PAGINATION LOGIC ---
+            total_items = len(students)
+            total_pages = max(1, (total_items + self.items_per_page - 1) // self.items_per_page)
+            if self.current_page > total_pages: self.current_page = total_pages
+            
+            self.lbl_page.setText(f"Page {self.current_page} of {total_pages}")
+            self.btn_prev.setEnabled(self.current_page > 1)
+            self.btn_next.setEnabled(self.current_page < total_pages)
+            
+            start_idx = (self.current_page - 1) * self.items_per_page
+            end_idx = start_idx + self.items_per_page
+            page_data = students[start_idx:end_idx]
+            # ------------------------
+
+            for row_idx, student in enumerate(page_data):
                 self.table.insertRow(row_idx)
                 self.table.setItem(row_idx, 0, QTableWidgetItem(str(student.get("student_id", ""))))
                 self.table.setItem(row_idx, 1, QTableWidgetItem(str(student.get("name", ""))))
@@ -161,12 +217,10 @@ class StudentsView(QWidget):
         self.current_student_id = self.table.item(row, 0).text()
         student_name = self.table.item(row, 1).text()
         
-        # Update Profile Header
         self.profile_name.setText(student_name)
         initials = "".join([w[0] for w in student_name.split()[:2]]).upper() if student_name else "ID"
         self.avatar_circle.setText(initials)
         
-        # Fill Form
         self.input_id.setText(self.current_student_id)
         self.input_id.setReadOnly(True)
         self.input_name.setText(student_name)
@@ -177,7 +231,6 @@ class StudentsView(QWidget):
         self.input_approve.setChecked(self.table.item(row, 4).text() == "Yes")
         self.input_status.setCurrentText(self.table.item(row, 5).text())
         
-        # check for the hidden year column
         year_item = self.table.item(row, 6)
         if year_item and year_item.text():
             self.input_year.setCurrentText(year_item.text())

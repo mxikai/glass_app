@@ -86,6 +86,11 @@ class TransactionsView(QWidget):
         self.current_line_items = []
         self.student_mapping = {}
 
+        # --- PAGINATION TRACKERS ---
+        self.pay_page = 1
+        self.exp_page = 1
+        self.items_per_page = 50
+
         self.setup_ui()
 
     def showEvent(self, event):
@@ -126,13 +131,69 @@ class TransactionsView(QWidget):
         self.tabs.setObjectName("modernTabs")
         self.tabs.currentChanged.connect(self.on_tab_changed)
 
+        # --- TAB 1: PAYMENTS (With Pagination) ---
+        self.tab_pay = QWidget()
+        pay_layout = QVBoxLayout(self.tab_pay)
+        pay_layout.setContentsMargins(0, 10, 0, 0)
+        
         self.table_payments = self._create_table(["ID", "Date", "Student", "Amount", "Approval", "Status"])
         self.table_payments.itemSelectionChanged.connect(self.on_payment_select)
-        self.tabs.addTab(self.table_payments, "Payments")
+        pay_layout.addWidget(self.table_payments)
+        
+        pay_ctrl = QHBoxLayout()
+        self.pay_prev = QPushButton("◄ Prev")
+        self.pay_prev.setObjectName("secondaryBtn")
+        self.pay_prev.setFixedWidth(80)
+        self.pay_prev.clicked.connect(self.pay_prev_page)
+        
+        self.pay_lbl = QLabel("Page 1 of 1")
+        self.pay_lbl.setStyleSheet("color: #9B9BB0; font-weight: bold;")
+        
+        self.pay_next = QPushButton("Next ►")
+        self.pay_next.setObjectName("secondaryBtn")
+        self.pay_next.setFixedWidth(80)
+        self.pay_next.clicked.connect(self.pay_next_page)
+        
+        pay_ctrl.addWidget(self.pay_prev)
+        pay_ctrl.addStretch()
+        pay_ctrl.addWidget(self.pay_lbl)
+        pay_ctrl.addStretch()
+        pay_ctrl.addWidget(self.pay_next)
+        pay_layout.addLayout(pay_ctrl)
+        
+        self.tabs.addTab(self.tab_pay, "Payments")
 
+        # --- TAB 2: EXPENSES (With Pagination) ---
+        self.tab_exp = QWidget()
+        exp_layout = QVBoxLayout(self.tab_exp)
+        exp_layout.setContentsMargins(0, 10, 0, 0)
+        
         self.table_expenses = self._create_table(["ID", "Date", "Budget Item", "Amount", "Approval", "Status"])
         self.table_expenses.itemSelectionChanged.connect(self.on_expense_select)
-        self.tabs.addTab(self.table_expenses, "Expenses")
+        exp_layout.addWidget(self.table_expenses)
+        
+        exp_ctrl = QHBoxLayout()
+        self.exp_prev = QPushButton("◄ Prev")
+        self.exp_prev.setObjectName("secondaryBtn")
+        self.exp_prev.setFixedWidth(80)
+        self.exp_prev.clicked.connect(self.exp_prev_page)
+        
+        self.exp_lbl = QLabel("Page 1 of 1")
+        self.exp_lbl.setStyleSheet("color: #9B9BB0; font-weight: bold;")
+        
+        self.exp_next = QPushButton("Next ►")
+        self.exp_next.setObjectName("secondaryBtn")
+        self.exp_next.setFixedWidth(80)
+        self.exp_next.clicked.connect(self.exp_next_page)
+        
+        exp_ctrl.addWidget(self.exp_prev)
+        exp_ctrl.addStretch()
+        exp_ctrl.addWidget(self.exp_lbl)
+        exp_ctrl.addStretch()
+        exp_ctrl.addWidget(self.exp_next)
+        exp_layout.addLayout(exp_ctrl)
+        
+        self.tabs.addTab(self.tab_exp, "Expenses")
 
         left_col.addWidget(self.tabs)
 
@@ -152,7 +213,6 @@ class TransactionsView(QWidget):
         self.form_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         panel_layout.addWidget(self.form_title)
 
-        # Using ScrollArea to prevent form clipping
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         scroll_area.setStyleSheet("QScrollArea { border: none; background: transparent; } QWidget#scrollContainer { background: transparent; }")
@@ -172,7 +232,6 @@ class TransactionsView(QWidget):
         
         panel_layout.addWidget(scroll_area)
 
-        # Action Buttons
         self.btn_save = QPushButton("Save Payment")
         self.btn_save.setObjectName("primaryBtn")
         self.btn_save.clicked.connect(self.save_current_form)
@@ -328,6 +387,32 @@ class TransactionsView(QWidget):
         layout.addRow(self.group_lines)
         self.form_stack.addWidget(widget)
 
+    # --- PAGINATION BUTTON ACTIONS ---
+    def pay_prev_page(self):
+        if self.pay_page > 1:
+            self.pay_page -= 1
+            self.refresh_payments_table()
+
+    def pay_next_page(self):
+        self.pay_page += 1
+        self.refresh_payments_table()
+
+    def exp_prev_page(self):
+        if self.exp_page > 1:
+            self.exp_page -= 1
+            self.refresh_expenses_table()
+
+    def exp_next_page(self):
+        self.exp_page += 1
+        self.refresh_expenses_table()
+
+    def on_filter_changed(self):
+        """Reset pagination when the filter changes!"""
+        self.pay_page = 1
+        self.exp_page = 1
+        self.refresh_payments_table()
+        self.refresh_expenses_table()
+
     # --- DATA LOADING ---
     def load_all_data(self):
         try:
@@ -345,8 +430,8 @@ class TransactionsView(QWidget):
             QMessageBox.warning(self, "Data Error", f"Could not load data: {e}")
 
     def populate_dropdowns(self):
-        # Filter Plan Dropdown
         self.filter_plan_cb.blockSignals(True)
+        current_filter = self.filter_plan_cb.currentData()
         self.filter_plan_cb.clear()
         self.filter_plan_cb.addItem("All Plans", None)
         
@@ -361,13 +446,16 @@ class TransactionsView(QWidget):
             self.pay_plan.addItem(plan_text, p.get("plan_id"))
             self.exp_plan.addItem(plan_text, p.get("plan_id"))
             
+        if current_filter:
+            idx = self.filter_plan_cb.findData(current_filter)
+            if idx >= 0: self.filter_plan_cb.setCurrentIndex(idx)
+            
         self.filter_plan_cb.blockSignals(False)
         self.pay_plan.blockSignals(False)
         self.exp_plan.blockSignals(False)
 
         self.pay_approver.clear()
         self.exp_approver.clear()
-        
         self.pay_approver.addItem("-- Pending Approver --", None)
         self.exp_approver.addItem("-- Pending Approver --", None)
         
@@ -378,11 +466,6 @@ class TransactionsView(QWidget):
                 self.exp_approver.addItem(label, s.get("student_id"))
 
         self.filter_fund_buckets()
-
-    def on_filter_changed(self):
-        """Triggers when the user changes the filter dropdown at the top."""
-        self.refresh_payments_table()
-        self.refresh_expenses_table()
 
     def filter_fund_buckets(self):
         self.exp_bucket.blockSignals(True)
@@ -441,7 +524,7 @@ class TransactionsView(QWidget):
         if current_text and current_text not in valid_strings:
             self.pay_student.clear()
 
-    # --- TABLES ---
+    # --- TABLES & PAGINATION LOGIC ---
     def refresh_payments_table(self):
         self.table_payments.setRowCount(0)
         filter_plan_id = self.filter_plan_cb.currentData()
@@ -451,7 +534,19 @@ class TransactionsView(QWidget):
         if filter_plan_id:
             payments = [t for t in payments if t.get("plan_id") == filter_plan_id]
             
-        for row, t in enumerate(payments):
+        total_items = len(payments)
+        total_pages = max(1, (total_items + self.items_per_page - 1) // self.items_per_page)
+        if self.pay_page > total_pages: self.pay_page = max(1, total_pages)
+        
+        self.pay_lbl.setText(f"Page {self.pay_page} of {total_pages}")
+        self.pay_prev.setEnabled(self.pay_page > 1)
+        self.pay_next.setEnabled(self.pay_page < total_pages)
+        
+        start_idx = (self.pay_page - 1) * self.items_per_page
+        end_idx = start_idx + self.items_per_page
+        page_data = payments[start_idx:end_idx]
+            
+        for row, t in enumerate(page_data):
             self.table_payments.insertRow(row)
             self.table_payments.setItem(row, 0, QTableWidgetItem(str(t.get("transaction_id", ""))))
             self.table_payments.setItem(row, 1, QTableWidgetItem(str(t.get("transaction_date", ""))[:10]))
@@ -466,11 +561,22 @@ class TransactionsView(QWidget):
         
         expenses = [t for t in self.transactions_data if t.get("transaction_type") == "EXPENSE"]
         
-        # Apply the visual filter
         if filter_plan_id:
             expenses = [t for t in expenses if t.get("plan_id") == filter_plan_id]
             
-        for row, t in enumerate(expenses):
+        total_items = len(expenses)
+        total_pages = max(1, (total_items + self.items_per_page - 1) // self.items_per_page)
+        if self.exp_page > total_pages: self.exp_page = max(1, total_pages)
+        
+        self.exp_lbl.setText(f"Page {self.exp_page} of {total_pages}")
+        self.exp_prev.setEnabled(self.exp_page > 1)
+        self.exp_next.setEnabled(self.exp_page < total_pages)
+        
+        start_idx = (self.exp_page - 1) * self.items_per_page
+        end_idx = start_idx + self.items_per_page
+        page_data = expenses[start_idx:end_idx]
+            
+        for row, t in enumerate(page_data):
             self.table_expenses.insertRow(row)
             item_name = next((i['item_name'] for i in self.items_data if i['budget_item_id'] == t.get("budget_item_id")), str(t.get("budget_item_id", "")))
             
