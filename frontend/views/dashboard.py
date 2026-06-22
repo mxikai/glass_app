@@ -39,22 +39,24 @@ class MiniChart(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-        # Safely extract the amount values
+        # Grab the running balance amounts from the backend
         values = [float(point.get('amount', 0)) for point in self.data]
         
-        # If no data, draw a flat zero line
-        if len(values) == 0:
-            values = [0.0, 0.0]
-        # If only 1 approved transaction, draw a line from 0 to that amount
-        elif len(values) == 1:
-            values.insert(0, 0.0)
+        # ALWAYS anchor the chart at 0.0 (the starting balance before any transactions)
+        values.insert(0, 0.0)
+        
+        # If there are no real transactions yet, draw a flat baseline
+        if len(values) == 1:
+            values.append(0.0)
 
         width = self.width()
         height = self.height()
         
-        max_val = max(values) if max(values) > 0 else 1
+        max_val = max(values)
         min_val = min(values)
-        val_range = max_val - min_val if max_val != min_val else 1
+        
+        # Add a tiny buffer so the highest point doesn't clip the top of the frame
+        val_range = (max_val - min_val) if max_val != min_val else 1.0
 
         path = QPainterPath()
         step_x = width / (len(values) - 1)
@@ -68,6 +70,7 @@ class MiniChart(QWidget):
             x2 = i * step_x
             y2 = height - ((values[i] - min_val) / val_range * (height - 30)) - 15
 
+            # Smooth cubic bezier curve logic
             ctrl1_x = x1 + (x2 - x1) / 2
             ctrl1_y = y1
             ctrl2_x = x1 + (x2 - x1) / 2
@@ -331,7 +334,6 @@ class DashboardView(QWidget):
             if not plan_id:
                 return
 
-            # Relying entirely on the backend's logic now!
             data = get_dashboard_summary(plan_id)
             all_transactions = list_transactions()
             
@@ -344,8 +346,9 @@ class DashboardView(QWidget):
             self.lbl_in_val.setText(f"₱ {float(totals.get('payments', 0)):,.2f}")
             self.lbl_out_val.setText(f"₱ {float(totals.get('expenses', 0)):,.2f}")
             
-            cash_flow = data.get("cash_flow", [])
-            self.chart.update_data(cash_flow)
+            # Trust the backend! Pass the precise cash flow right to the chart.
+            backend_cash_flow = data.get("cash_flow", [])
+            self.chart.update_data(backend_cash_flow)
 
             coll = data.get("collection_progress", {})
             paid = coll.get('paid_count', 0)
@@ -363,15 +366,15 @@ class DashboardView(QWidget):
             inv = data.get("inventory_summary", {})
             self.lbl_inv_count.setText(f"{inv.get('total_items', 0)} Unique Items ({inv.get('total_quantity', 0)} Qty)")
 
-            # Update Recent Transactions (This lists ALL transactions, not just approved ones)
             self.update_recent_transactions(all_transactions, plan_id)
-            
             self.update_buckets(data.get("fund_bucket_utilization", []))
             
         except Exception as e:
             print(f"Dashboard Sync Error: {e}")
 
     def update_recent_transactions(self, transactions, current_plan_id):
+        # The Recent Activity table shows ALL transactions (even Pending) 
+        # so you can see what needs to be approved!
         plan_txns = [t for t in transactions if str(t.get('plan_id')) == str(current_plan_id)]
         recent = sorted(plan_txns, key=lambda x: x.get('transaction_id', 0), reverse=True)[:8]
         

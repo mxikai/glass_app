@@ -103,9 +103,26 @@ class TransactionsView(QWidget):
         left_col = QVBoxLayout()
         left_col.setSpacing(16)
         
+        # --- THE FIX: ADDED HEADER LAYOUT WITH FILTER ---
+        header_layout = QHBoxLayout()
         title = QLabel("Transaction Ledger")
         title.setObjectName("pageTitle")
-        left_col.addWidget(title)
+        header_layout.addWidget(title)
+        
+        header_layout.addStretch()
+        
+        lbl_filter = QLabel("Filter by Plan:")
+        lbl_filter.setStyleSheet("font-weight: 600; color: #9B9BB0; font-size: 13px; font-family: 'Segoe UI';")
+        self.filter_plan_cb = QComboBox()
+        self.filter_plan_cb.setObjectName("formInput")
+        self.filter_plan_cb.setFixedWidth(220)
+        self.filter_plan_cb.currentIndexChanged.connect(self.on_filter_changed)
+        
+        header_layout.addWidget(lbl_filter)
+        header_layout.addWidget(self.filter_plan_cb)
+        
+        left_col.addLayout(header_layout)
+        # ------------------------------------------------
 
         self.tabs = QTabWidget()
         self.tabs.setObjectName("modernTabs")
@@ -147,7 +164,6 @@ class TransactionsView(QWidget):
         scroll_layout = QVBoxLayout(scroll_container)
         scroll_layout.setContentsMargins(0, 0, 0, 0)
 
-        # THE FIX: Form Stack is created here!
         self.form_stack = QStackedWidget()
         self.setup_payment_form()
         self.setup_expense_form()
@@ -245,6 +261,8 @@ class TransactionsView(QWidget):
         self.exp_plan = QComboBox()
         self.exp_bucket = QComboBox()
         self.exp_item = QComboBox()
+        
+        self.exp_plan.currentIndexChanged.connect(self.filter_fund_buckets)
         self.exp_bucket.currentIndexChanged.connect(self.filter_budget_items)
         
         self.exp_date = QDateTimeEdit(QDateTime.currentDateTime())
@@ -329,14 +347,25 @@ class TransactionsView(QWidget):
             QMessageBox.warning(self, "Data Error", f"Could not load data: {e}")
 
     def populate_dropdowns(self):
+        # Filter Plan Dropdown
+        self.filter_plan_cb.blockSignals(True)
+        self.filter_plan_cb.clear()
+        self.filter_plan_cb.addItem("All Plans", None)
+        
         self.pay_plan.blockSignals(True)
+        self.exp_plan.blockSignals(True)
         self.pay_plan.clear()
         self.exp_plan.clear()
+        
         for p in self.plans_data:
             plan_text = f"Plan {p.get('plan_id')} ({p.get('academic_year')})"
+            self.filter_plan_cb.addItem(plan_text, p.get("plan_id"))
             self.pay_plan.addItem(plan_text, p.get("plan_id"))
             self.exp_plan.addItem(plan_text, p.get("plan_id"))
+            
+        self.filter_plan_cb.blockSignals(False)
         self.pay_plan.blockSignals(False)
+        self.exp_plan.blockSignals(False)
 
         self.pay_approver.clear()
         self.exp_approver.clear()
@@ -350,11 +379,35 @@ class TransactionsView(QWidget):
                 self.pay_approver.addItem(label, s.get("student_id"))
                 self.exp_approver.addItem(label, s.get("student_id"))
 
+        self.filter_fund_buckets()
+
+    def on_filter_changed(self):
+        """Triggers when the user changes the filter dropdown at the top."""
+        self.refresh_payments_table()
+        self.refresh_expenses_table()
+
+    def filter_fund_buckets(self):
+        self.exp_bucket.blockSignals(True)
         self.exp_bucket.clear()
-        for b in self.buckets_data:
-            self.exp_bucket.addItem(b.get("bucket_name"), b.get("bucket_id"))
-            
+        
+        plan_id = self.exp_plan.currentData()
+        if plan_id:
+            filtered = [b for b in self.buckets_data if b.get('plan_id') == plan_id]
+            for b in filtered:
+                self.exp_bucket.addItem(b.get('bucket_name'), b.get('bucket_id'))
+                
+        self.exp_bucket.blockSignals(False)
         self.filter_budget_items()
+
+    def filter_budget_items(self):
+        self.exp_item.clear()
+        
+        bucket_id = self.exp_bucket.currentData()
+        if not bucket_id: return
+        
+        filtered = [i for i in self.items_data if i.get('bucket_id') == bucket_id]
+        for i in filtered:
+            self.exp_item.addItem(i['item_name'], i['budget_item_id'])
 
     def filter_students(self):
         plan_id = self.pay_plan.currentData()
@@ -390,18 +443,17 @@ class TransactionsView(QWidget):
         if current_text and current_text not in valid_strings:
             self.pay_student.clear()
 
-    def filter_budget_items(self):
-        self.exp_item.clear()
-        bucket_id = self.exp_bucket.currentData()
-        if not bucket_id: return
-        filtered = [i for i in self.items_data if i.get('bucket_id') == bucket_id]
-        for i in filtered:
-            self.exp_item.addItem(i['item_name'], i['budget_item_id'])
-
     # --- TABLES ---
     def refresh_payments_table(self):
         self.table_payments.setRowCount(0)
+        filter_plan_id = self.filter_plan_cb.currentData()
+        
         payments = [t for t in self.transactions_data if t.get("transaction_type") == "PAYMENT"]
+        
+        # Apply the visual filter
+        if filter_plan_id:
+            payments = [t for t in payments if t.get("plan_id") == filter_plan_id]
+            
         for row, t in enumerate(payments):
             self.table_payments.insertRow(row)
             self.table_payments.setItem(row, 0, QTableWidgetItem(str(t.get("transaction_id", ""))))
@@ -413,7 +465,14 @@ class TransactionsView(QWidget):
 
     def refresh_expenses_table(self):
         self.table_expenses.setRowCount(0)
+        filter_plan_id = self.filter_plan_cb.currentData()
+        
         expenses = [t for t in self.transactions_data if t.get("transaction_type") == "EXPENSE"]
+        
+        # Apply the visual filter
+        if filter_plan_id:
+            expenses = [t for t in expenses if t.get("plan_id") == filter_plan_id]
+            
         for row, t in enumerate(expenses):
             self.table_expenses.insertRow(row)
             item_name = next((i['item_name'] for i in self.items_data if i['budget_item_id'] == t.get("budget_item_id")), str(t.get("budget_item_id", "")))
@@ -456,7 +515,6 @@ class TransactionsView(QWidget):
 
     # --- SELECTIONS & TABS ---
     def on_tab_changed(self, index):
-        # THE FIX: Prevents the crash during initialization!
         if not hasattr(self, 'form_stack'): return 
         
         self.form_stack.setCurrentIndex(index)
@@ -514,9 +572,9 @@ class TransactionsView(QWidget):
             dt = QDateTime.fromString(tx["transaction_date"], Qt.DateFormat.ISODate)
             self.exp_date.setDateTime(dt)
 
-        # Map to bucket via item
         item_id = tx.get("budget_item_id")
         bucket_id = next((i.get("bucket_id") for i in self.items_data if i.get("budget_item_id") == item_id), None)
+        
         if bucket_id:
             idx_bucket = self.exp_bucket.findData(bucket_id)
             if idx_bucket >= 0: self.exp_bucket.setCurrentIndex(idx_bucket)

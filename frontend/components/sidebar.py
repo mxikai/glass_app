@@ -46,17 +46,7 @@ class Sidebar(QWidget):
 
         layout.addStretch()
 
-        # Avatar at bottom
-        avatar = QLabel("FA")
-        avatar.setObjectName("avatar")
-        avatar.setFixedSize(36, 36)
-        avatar.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        avatar.setStyleSheet(
-            "background-color: rgba(255,255,255,0.25); color: white;"
-            "border-radius: 18px; font-size: 11px; font-weight: 700;"
-            "font-family: 'Segoe UI';" 
-        )
-        layout.addWidget(avatar, alignment=Qt.AlignmentFlag.AlignHCenter)
+        
 
         # Set dashboard as active on load
         self._set_active("dashboard")

@@ -31,7 +31,6 @@ class BudgetPlanView(QWidget):
         self.current_bucket_id = None
         self.current_item_id = None
         
-        # This invisible list holds the historical OR synced students
         self.current_plan_student_ids = []
         
         self.plans_data = []
@@ -42,7 +41,6 @@ class BudgetPlanView(QWidget):
         self.setup_ui()
 
     def showEvent(self, event):
-        """Refreshes the data every time the tab is clicked!"""
         super().showEvent(event)
         self.load_all_data()
 
@@ -152,7 +150,6 @@ class BudgetPlanView(QWidget):
         self.plan_budget.setRange(0, 9999999)
         self.plan_budget.setPrefix("₱ ")
         
-        # --- THE SYNC ROW ---
         self.plan_members = QSpinBox()
         self.plan_members.setRange(0, 5000)
         self.plan_members.setReadOnly(True)
@@ -166,7 +163,6 @@ class BudgetPlanView(QWidget):
         member_layout = QHBoxLayout()
         member_layout.addWidget(self.plan_members)
         member_layout.addWidget(self.btn_sync_students)
-        # --------------------
 
         self.plan_status = QComboBox()
         self.plan_status.addItems(["Active", "Archived"])
@@ -177,7 +173,7 @@ class BudgetPlanView(QWidget):
         layout.addRow("Acad Year", self.plan_year)
         layout.addRow("Semester", self.plan_sem)
         layout.addRow("Total Budget", self.plan_budget)
-        layout.addRow("Students", member_layout) # Added our custom horizontal layout here
+        layout.addRow("Students", member_layout) 
         layout.addRow("Status", self.plan_status)
         
         self.form_stack.addWidget(widget)
@@ -244,13 +240,16 @@ class BudgetPlanView(QWidget):
         curr_plan = self.bucket_plan_select.currentData()
         curr_bucket = self.item_bucket_select.currentData()
 
+        # Add explicit Select placeholders
         self.bucket_plan_select.clear()
+        self.bucket_plan_select.addItem("-- Select Budget Plan --", None)
         for p in self.plans_data:
             if isinstance(p, dict):
                 label = f"Plan {p.get('plan_id')} ({p.get('academic_year')} Sem {p.get('semester')})"
                 self.bucket_plan_select.addItem(label, p.get("plan_id"))
 
         self.item_bucket_select.clear()
+        self.item_bucket_select.addItem("-- Select Fund Bucket --", None)
         for b in self.buckets_data:
             if isinstance(b, dict):
                 label = f"{b.get('bucket_name')} (ID: {b.get('bucket_id')})"
@@ -265,7 +264,6 @@ class BudgetPlanView(QWidget):
 
     # --- THE MAGIC SYNC METHOD ---
     def sync_active_students(self, silent=False):
-        """Grabs the current active database roster and locks it into this plan's memory."""
         active_ids = [
             s.get("student_id") 
             for s in self.students_data 
@@ -292,9 +290,27 @@ class BudgetPlanView(QWidget):
 
     def refresh_buckets_table(self):
         self.table_buckets.setRowCount(0)
-        filtered = self.buckets_data
-        if self.current_plan_id:
-            filtered = [b for b in self.buckets_data if str(b.get("plan_id")) == str(self.current_plan_id)]
+        
+        # --- THE FIX: UX Empty States ---
+        if not self.current_plan_id:
+            self.table_buckets.setRowCount(1)
+            item = QTableWidgetItem("👈 Please select a Budget Plan in the first tab to view its Fund Buckets.")
+            item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            item.setForeground(Qt.GlobalColor.darkGray)
+            self.table_buckets.setItem(0, 0, item)
+            self.table_buckets.setSpan(0, 0, 1, self.table_buckets.columnCount())
+            return
+            
+        filtered = [b for b in self.buckets_data if str(b.get("plan_id")) == str(self.current_plan_id)]
+        
+        if not filtered:
+            self.table_buckets.setRowCount(1)
+            item = QTableWidgetItem("No Fund Buckets found for this plan.")
+            item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            item.setForeground(Qt.GlobalColor.darkGray)
+            self.table_buckets.setItem(0, 0, item)
+            self.table_buckets.setSpan(0, 0, 1, self.table_buckets.columnCount())
+            return
             
         for i, b in enumerate(filtered):
             self.table_buckets.insertRow(i)
@@ -305,9 +321,27 @@ class BudgetPlanView(QWidget):
 
     def refresh_items_table(self):
         self.table_items.setRowCount(0)
-        filtered = self.items_data
-        if self.current_bucket_id:
-            filtered = [it for it in self.items_data if str(it.get("bucket_id")) == str(self.current_bucket_id)]
+        
+        # --- THE FIX: UX Empty States ---
+        if not self.current_bucket_id:
+            self.table_items.setRowCount(1)
+            item = QTableWidgetItem("👈 Please select a Fund Bucket in the previous tab to view its Budget Items.")
+            item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            item.setForeground(Qt.GlobalColor.darkGray)
+            self.table_items.setItem(0, 0, item)
+            self.table_items.setSpan(0, 0, 1, self.table_items.columnCount())
+            return
+            
+        filtered = [it for it in self.items_data if str(it.get("bucket_id")) == str(self.current_bucket_id)]
+        
+        if not filtered:
+            self.table_items.setRowCount(1)
+            item = QTableWidgetItem("No Budget Items found for this bucket.")
+            item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            item.setForeground(Qt.GlobalColor.darkGray)
+            self.table_items.setItem(0, 0, item)
+            self.table_items.setSpan(0, 0, 1, self.table_items.columnCount())
+            return
             
         for i, it in enumerate(filtered):
             self.table_items.insertRow(i)
@@ -323,9 +357,9 @@ class BudgetPlanView(QWidget):
         titles = ["Plan Details", "Bucket Details", "Item Details"]
         self.form_title.setText(titles[index])
         
-        if index == 0 and not self.current_plan_id: self.clear_current_form()
-        elif index == 1 and not self.current_bucket_id: self.clear_current_form()
-        elif index == 2 and not self.current_item_id: self.clear_current_form()
+        # Force a table refresh to trigger the empty states if necessary
+        self.refresh_buckets_table()
+        self.refresh_items_table()
 
     def on_plan_select(self):
         rows = self.table_plans.selectedItems()
@@ -345,10 +379,8 @@ class BudgetPlanView(QWidget):
             self.plan_budget.setValue(float(plan.get("total_planned_budget") or 0))
             self.plan_status.setCurrentText(plan.get("status", "Active"))
             
-            # --- Load Historical Snapshot ---
             self.current_plan_student_ids = plan.get("student_ids") or []
             self.plan_members.setValue(int(plan.get("member_count") or 0))
-            # --------------------------------
             
             idx = self.bucket_plan_select.findData(self.current_plan_id)
             if idx >= 0: self.bucket_plan_select.setCurrentIndex(idx)
@@ -362,7 +394,13 @@ class BudgetPlanView(QWidget):
         rows = self.table_buckets.selectedItems()
         if not rows: return
         
-        self.current_bucket_id = int(self.table_buckets.item(rows[0].row(), 0).text())
+        # Click protection: Ignore if they click the warning message row
+        first_text = self.table_buckets.item(rows[0].row(), 0).text()
+        if "👈" in first_text or "No Fund Buckets" in first_text:
+            self.table_buckets.clearSelection()
+            return
+            
+        self.current_bucket_id = int(first_text)
         
         bucket = None
         for b in self.buckets_data:
@@ -388,7 +426,13 @@ class BudgetPlanView(QWidget):
         rows = self.table_items.selectedItems()
         if not rows: return
         
-        self.current_item_id = int(self.table_items.item(rows[0].row(), 0).text())
+        # Click protection: Ignore if they click the warning message row
+        first_text = self.table_items.item(rows[0].row(), 0).text()
+        if "👈" in first_text or "No Budget Items" in first_text:
+            self.table_items.clearSelection()
+            return
+            
+        self.current_item_id = int(first_text)
         
         item = None
         for i in self.items_data:
@@ -410,7 +454,6 @@ class BudgetPlanView(QWidget):
             if idx == 0:  
                 if not self.plan_year.text(): raise ValueError("Academic Year is required.")
                 
-                # Verify we actually have students mapped in memory
                 if not self.current_plan_student_ids:
                     QMessageBox.warning(self, "Validation Error", "There are no students assigned to this plan. Try clicking Sync Active Roster.")
                     return
@@ -421,7 +464,7 @@ class BudgetPlanView(QWidget):
                     "total_planned_budget": self.plan_budget.value(),
                     "member_count": len(self.current_plan_student_ids), 
                     "status": self.plan_status.currentText(),
-                    "student_ids": self.current_plan_student_ids # Matches the exact historical/synced memory
+                    "student_ids": self.current_plan_student_ids 
                 }
                 
                 if self.current_plan_id: update_budget_plan(self.current_plan_id, data)
@@ -467,20 +510,28 @@ class BudgetPlanView(QWidget):
             self.plan_sem.setCurrentIndex(0)
             self.plan_budget.setValue(0)
             
-            # --- STARTING A NEW PLAN? Automatically sync today's active students instantly! ---
             self.sync_active_students(silent=True)
-            
             self.table_plans.clearSelection()
+            
+            self.current_bucket_id = None
+            self.current_item_id = None
+            self.refresh_buckets_table()
+            self.refresh_items_table()
+            
         elif idx == 1:
             self.current_bucket_id = None
-            self.bucket_plan_select.setCurrentIndex(-1) 
+            self.bucket_plan_select.setCurrentIndex(0) 
             self.bucket_name.clear()
             self.bucket_amount.setValue(0)
             self.bucket_desc.clear()
             self.table_buckets.clearSelection()
+            
+            self.current_item_id = None
+            self.refresh_items_table()
+            
         elif idx == 2:
             self.current_item_id = None
-            self.item_bucket_select.setCurrentIndex(-1) 
+            self.item_bucket_select.setCurrentIndex(0) 
             self.item_name.clear()
             self.item_type.setCurrentIndex(0)
             self.item_amount.setValue(0)
