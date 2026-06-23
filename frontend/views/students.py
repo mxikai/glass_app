@@ -39,9 +39,23 @@ class StudentsView(QWidget):
         left_col = QVBoxLayout()
         left_col.setSpacing(16)
         
+        # --- SMART SEARCH ---
+        header_layout = QHBoxLayout()
         title = QLabel("Student Directory")
         title.setObjectName("pageTitle")
-        left_col.addWidget(title)
+        
+        self.search_bar = QLineEdit()
+        self.search_bar.setObjectName("searchBar")
+        self.search_bar.setPlaceholderText("🔍 Search Name or ID...")
+        self.search_bar.setFixedWidth(280)
+        self.search_bar.textChanged.connect(self.on_search_changed)
+        
+        header_layout.addWidget(title)
+        header_layout.addStretch()
+        header_layout.addWidget(self.search_bar)
+        
+        left_col.addLayout(header_layout)
+        # --------------------------------
 
         self.table = QTableWidget()
         self.table.setObjectName("modernTable")
@@ -166,6 +180,12 @@ class StudentsView(QWidget):
         main_layout.addLayout(left_col, stretch=1)
         main_layout.addWidget(right_panel)
 
+    # --- NEW: SEARCH EVENT ---
+    def on_search_changed(self):
+        """Reset to page 1 and reload data whenever the user types something."""
+        self.current_page = 1
+        self.load_data()
+
     def prev_page(self):
         if self.current_page > 1:
             self.current_page -= 1
@@ -178,7 +198,20 @@ class StudentsView(QWidget):
     def load_data(self):
         self.table.setRowCount(0) 
         try:
-            students = list_students()
+            all_students = list_students()
+            
+            # --- SMART SEARCH LOGIC ---
+            search_query = self.search_bar.text().strip().lower()
+            if search_query:
+                # Keep only students where the search query matches the name OR the ID
+                students = [
+                    s for s in all_students 
+                    if search_query in str(s.get("name", "")).lower() 
+                    or search_query in str(s.get("student_id", "")).lower()
+                ]
+            else:
+                students = all_students
+            # --------------------------
             
             # --- PAGINATION LOGIC ---
             total_items = len(students)

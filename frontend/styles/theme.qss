@@ -16,11 +16,12 @@ QWidget#sidebar {
 QPushButton#navBtn {
     background-color: transparent;
     border: none;
-    outline: none; /* Kills the click outline */
+    outline: none;
     color: rgba(255, 255, 255, 0.6);
     font-size: 22px;
-    padding: 14px 0px;
+    padding: 0px;
     margin: 4px -2px 4px 12px; 
+    
     border-top-left-radius: 20px;
     border-bottom-left-radius: 20px;
     border-top-right-radius: 0px;
