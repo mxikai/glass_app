@@ -494,3 +494,19 @@ QDoubleSpinBox#formInput, QSpinBox#formInput {
 QDoubleSpinBox#formInput:focus, QSpinBox#formInput:focus {
     border: 1.5px solid #6C5CE7;
 }
+
+QComboBox QAbstractItemView {
+    background-color: white;
+    color: #1A1A3E;
+    selection-background-color: #F5F3FF;
+    selection-color: #6C5CE7;
+    border: 1px solid #EEF0F8;
+    border-radius: 8px;
+    outline: none;
+    padding: 4px;
+}
+
+QComboBox::drop-down {
+    border: none;
+    background: transparent;
+}
