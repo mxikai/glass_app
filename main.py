@@ -83,6 +83,23 @@ def main():
         
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
+    
+    from PyQt6.QtGui import QPalette, QColor
+    
+    light_palette = QPalette()
+    light_palette.setColor(QPalette.ColorRole.Window, QColor(238, 240, 248))      # #EEF0F8
+    light_palette.setColor(QPalette.ColorRole.WindowText, QColor(26, 26, 62))     # #1A1A3E
+    light_palette.setColor(QPalette.ColorRole.Base, QColor(255, 255, 255))        # White
+    light_palette.setColor(QPalette.ColorRole.AlternateBase, QColor(245, 246, 250))# #F5F6FA
+    light_palette.setColor(QPalette.ColorRole.ToolTipBase, QColor(255, 255, 255)) 
+    light_palette.setColor(QPalette.ColorRole.ToolTipText, QColor(26, 26, 62))
+    light_palette.setColor(QPalette.ColorRole.Text, QColor(26, 26, 62))
+    light_palette.setColor(QPalette.ColorRole.Button, QColor(255, 255, 255))
+    light_palette.setColor(QPalette.ColorRole.ButtonText, QColor(26, 26, 62))
+    light_palette.setColor(QPalette.ColorRole.Highlight, QColor(108, 92, 231))    # #6C5CE7
+    light_palette.setColor(QPalette.ColorRole.HighlightedText, QColor(255, 255, 255))
+    
+    app.setPalette(light_palette)
 
     # High-DPI support
     try:
