@@ -1,14 +1,22 @@
-/* ========== GLASS App Theme ========== */
+/* ========== GLASS App Theme (Glassmorphism Edition) ========== */
 
-/* --- App Background --- */
+/* --- App Background (Subtle Apple-style Gradient) --- */
 QMainWindow, QWidget#centralWidget {
-    background-color: #EEF0F8;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                                stop:0 #EEF0F8,
+                                stop:0.35 #EAE5F4,
+                                stop:0.7 #F6E6ED,
+                                stop:1 #E6EFEA);
 }
 
 /* --- Sidebar --- */
 QWidget#sidebar {
-    background-color: #6C5CE7;
-    border-radius: 24px; /* Adds the soft curve */
+    background-color: rgba(108, 92, 231, 0.65);
+    border-top: 1.5px solid rgba(255, 255, 255, 0.5);
+    border-left: 1.5px solid rgba(255, 255, 255, 0.3);
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 24px; 
     min-width: 70px;
     max-width: 70px;
 }
@@ -21,20 +29,14 @@ QPushButton#navBtn {
     font-size: 22px;
     padding: 0px;
     margin: 4px -2px 4px 12px; 
-    
     border-top-left-radius: 20px;
     border-bottom-left-radius: 20px;
     border-top-right-radius: 0px;
     border-bottom-right-radius: 0px;
 }
 
-QPushButton#navBtn:focus {
-    outline: none; /* Double-tap to ensure no focus artifact */
-    border: none;
-}
-
 QPushButton#navBtn:hover {
-    background-color: rgba(255, 255, 255, 0.15);
+    background-color: rgba(255, 255, 255, 0.2);
     color: white;
 }
 
@@ -45,296 +47,91 @@ QPushButton#navBtn:checked {
 
 /* --- Main Content Area --- */
 QWidget#contentArea {
-    background-color: #EEF0F8;
+    background-color: transparent; /* Lets the gradient show through! */
 }
 
-/* --- Page Title --- */
-QLabel#pageSubtitle {
-    color: #9B9BB0;
-    font-size: 12px;
-    font-family: 'Segoe UI';
-}
+QLabel#pageSubtitle { color: #8A8A9E; font-size: 12px; font-family: 'Segoe UI'; }
+QLabel#pageTitle { color: #1A1A3E; font-size: 24px; font-weight: 700; font-family: 'Segoe UI'; }
 
-QLabel#pageTitle {
-    color: #1A1A3E;
-    font-size: 24px;
-    font-weight: 700;
-    font-family: 'Segoe UI';
-}
-
-/* --- Summary Cards --- */
-QWidget#statCard {
-    background-color: white;
-    border-radius: 18px;
-    border: none;
-}
-
-QLabel#cardValue {
-    color: #1A1A3E;
-    font-size: 22px;
-    font-weight: 700;
-    font-family: 'Segoe UI';
-}
-
-QLabel#cardLabel {
-    color: #9B9BB0;
-    font-size: 12px;
-    font-family: 'Segoe UI';
-}
-
-QLabel#cardIcon {
-    font-size: 20px;
-}
-
-/* --- Purple Overview Card --- */
-QWidget#overviewCard {
-    background-color: #6C5CE7;
+/* =========================================
+   THE GLASS CARDS 
+   ========================================= */
+QWidget#statCard, QFrame#profilePanel, QWidget#bucketCard {
+    background-color: rgba(255, 255, 255, 0.55); /* Frosted White Glass */
+    border-top: 1.5px solid rgba(255, 255, 255, 0.9); /* Top light reflection */
+    border-left: 1.5px solid rgba(255, 255, 255, 0.7);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+    border-right: 1px solid rgba(255, 255, 255, 0.3);
     border-radius: 22px;
 }
 
-QLabel#overviewTitle {
-    color: rgba(255,255,255,0.7);
-    font-size: 13px;
-    font-family: 'Segoe UI';
-}
-
-QLabel#overviewValue {
-    color: white;
-    font-size: 20px;
-    font-weight: 700;
-    font-family: 'Segoe UI';
-}
-
-QLabel#overviewSub {
-    color: rgba(255,255,255,0.5);
-    font-size: 11px;
-    font-family: 'Segoe UI';
-}
-
-/* --- Pink Activity Card --- */
-QWidget#activityCard {
-    background-color: #FD79A8;
+/* The Purple Overview Card */
+QFrame#purpleOverviewCard {
+    background-color: rgba(108, 92, 231, 0.65);
+    border-top: 2.5px solid rgba(255, 255, 255, 0.6);
+    border-left: 2.5px solid rgba(255, 255, 255, 0.4);
+    border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+    border-right: 2px solid rgba(255, 255, 255, 0.1);
     border-radius: 22px;
 }
 
-QLabel#activityTitle {
-    color: white;
-    font-size: 15px;
-    font-weight: 600;
-    font-family: 'Segoe UI';
+/* The Table Background */
+QTableWidget#modernTable {
+    background-color: rgba(255, 255, 255, 0.45);
+    border: 1px solid rgba(255, 255, 255, 0.8);
+    border-radius: 16px;
+    padding: 10px;
 }
-
-QLabel#activityValue {
-    color: white;
-    font-size: 22px;
-    font-weight: 700;
-    font-family: 'Segoe UI';
-}
-
-/* --- Budget Bucket Progress Cards --- */
-QWidget#bucketCard {
-    background-color: white;
-    border-radius: 18px;
-}
-
-QLabel#bucketTitle {
-    color: #1A1A3E;
-    font-size: 13px;
-    font-weight: 600;
-    font-family: 'Segoe UI';
-}
-
-QLabel#bucketSub {
-    color: #9B9BB0;
-    font-size: 11px;
-    font-family: 'Segoe UI';
-}
-
-QProgressBar#bucketProgress {
-    background-color: #EEF0F8;
-    border-radius: 4px;
-    border: none;
-    height: 7px;
-    text-align: right;
-}
-
-QProgressBar#bucketProgress::chunk {
-    border-radius: 4px;
-    background-color: #6C5CE7;
-}
-
-QProgressBar#bucketProgressPink::chunk {
-    border-radius: 4px;
-    background-color: #FD79A8;
-}
-
-QProgressBar#bucketProgressGreen::chunk {
-    border-radius: 4px;
-    background-color: #00B894;
-}
-
-/* --- Right Panel --- */
-QWidget#rightPanel {
-    background-color: white;
-    border-radius: 22px;
-}
-
-QLabel#panelTitle {
-    color: #1A1A3E;
-    font-size: 15px;
-    font-weight: 700;
-    font-family: 'Segoe UI';
-}
-
-QPushButton#viewAllBtn {
-    background: transparent;
-    border: none;
-    color: #6C5CE7;
-    font-size: 12px;
-    font-family: 'Segoe UI';
-}
-
-QPushButton#viewAllBtn:hover {
-    color: #5A4BD1;
-}
-
-/* --- Student Row in Panel --- */
-QWidget#studentRow {
-    background: transparent;
-    border-radius: 10px;
+QTableWidget#modernTable::item {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.6);
     padding: 4px;
-}
-
-QWidget#studentRow:hover {
-    background-color: #F5F3FF;
-}
-
-QLabel#studentName {
     color: #1A1A3E;
-    font-size: 13px;
-    font-weight: 600;
-    font-family: 'Segoe UI';
 }
-
-QLabel#studentDetail {
-    color: #9B9BB0;
-    font-size: 11px;
-    font-family: 'Segoe UI';
-}
-
-/* --- Badge / Status Pill --- */
-QLabel#badgePaid {
-    background-color: #E8F5E9;
-    color: #2E7D32;
-    border-radius: 8px;
-    padding: 2px 8px;
-    font-size: 11px;
-    font-family: 'Segoe UI';
-}
-
-QLabel#badgePending {
-    background-color: #FFF3E0;
-    color: #E65100;
-    border-radius: 8px;
-    padding: 2px 8px;
-    font-size: 11px;
-    font-family: 'Segoe UI';
-}
-
-QLabel#badgeApproved {
-    background-color: #EDE7F6;
+QTableWidget#modernTable::item:selected {
+    background-color: rgba(108, 92, 231, 0.15);
     color: #6C5CE7;
     border-radius: 8px;
-    padding: 2px 8px;
-    font-size: 11px;
-    font-family: 'Segoe UI';
+}
+QHeaderView::section {
+    background-color: transparent;
+    border: none;
+    font-weight: 700;
+    color: #8A8A9E;
+    border-bottom: 2px solid rgba(255, 255, 255, 0.8);
+    padding-bottom: 8px;
+    text-align: left;
+}
+
+/* --- Form Inputs (Frosted Indent) --- */
+QLineEdit#formInput, QComboBox#formInput, QDoubleSpinBox#formInput, QSpinBox#formInput {
+    background-color: rgba(255, 255, 255, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.9);
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 13px;
+    color: #1A1A3E;
+}
+QLineEdit#formInput:focus, QComboBox#formInput:focus, QDoubleSpinBox#formInput:focus, QSpinBox#formInput:focus {
+    border: 1.5px solid #6C5CE7;
+    background-color: rgba(255, 255, 255, 0.8);
 }
 
 /* --- Search Bar --- */
 QLineEdit#searchBar {
-    background-color: white;
-    border: none;
+    background-color: rgba(255, 255, 255, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.9);
     border-radius: 12px;
     padding: 8px 16px;
     font-size: 13px;
     font-family: 'Segoe UI';
     color: #1A1A3E;
 }
-
 QLineEdit#searchBar:focus {
     border: 1.5px solid #6C5CE7;
+    background-color: rgba(255, 255, 255, 0.8);
 }
 
-/* --- Section Header --- */
-QLabel#sectionHeader {
-    color: #1A1A3E;
-    font-size: 16px;
-    font-weight: 700;
-    font-family: 'Segoe UI';
-}
-
-/* --- Avatar Circle --- */
-QLabel#avatar {
-    border-radius: 18px;
-    background-color: #EDE7F6;
-    color: #6C5CE7;
-    font-size: 12px;
-    font-weight: 700;
-    font-family: 'Segoe UI';
-    qproperty-alignment: AlignCenter;
-}
-
-/* --- Scrollbar --- */
-QScrollArea {
-    border: none;
-    background: transparent;
-}
-
-QScrollBar:vertical {
-    border: none;
-    background: #EEF0F8;
-    width: 6px;
-    border-radius: 3px;
-}
-
-QScrollBar::handle:vertical {
-    background: #C5BFEE;
-    border-radius: 3px;
-    min-height: 20px;
-}
-
-QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-    height: 0px;
-}
-
-/* --- Tab / Page Switcher --- */
-QPushButton#tabActive {
-    background-color: #6C5CE7;
-    color: white;
-    border-radius: 10px;
-    border: none;
-    font-size: 12px;
-    font-weight: 600;
-    font-family: 'Segoe UI';
-    padding: 6px 16px;
-}
-
-QPushButton#tabInactive {
-    background-color: transparent;
-    color: #9B9BB0;
-    border-radius: 10px;
-    border: none;
-    font-size: 12px;
-    font-family: 'Segoe UI';
-    padding: 6px 16px;
-}
-
-QPushButton#tabInactive:hover {
-    background-color: #EDE7F6;
-    color: #6C5CE7;
-}
-
-/* --- Action Button --- */
+/* --- Buttons --- */
 QPushButton#primaryBtn {
     background-color: #6C5CE7;
     color: white;
@@ -345,126 +142,83 @@ QPushButton#primaryBtn {
     font-family: 'Segoe UI';
     padding: 10px 20px;
 }
+QPushButton#primaryBtn:hover { background-color: #5A4BD1; }
 
-QPushButton#primaryBtn:hover {
-    background-color: #5A4BD1;
-}
-
-QPushButton#primaryBtn:pressed {
-    background-color: #4A3BBF;
-}
-
-/* =========================================
-   Students Panel
-   ========================================= */
-
-QFrame#profilePanel {
-    background-color: white;
-    border-radius: 24px;
-}
-
-QLabel#profileAvatar {
-    background-color: #EDE7F6;
-    color: #6C5CE7;
-    border-radius: 35px; /* Makes it a perfect circle */
-    font-size: 24px;
-    font-weight: 700;
-    font-family: 'Segoe UI';
-}
-
-QLabel#profileName {
-    color: #1A1A3E;
-    font-size: 18px;
-    font-weight: 700;
-    font-family: 'Segoe UI';
-    margin-top: 8px;
-}
-
-/* --- Clean Modern Table --- */
-QTableWidget#modernTable {
-    background-color: white;
-    border-radius: 16px;
-    border: none;
-    padding: 10px;
-}
-
-QTableWidget#modernTable::item {
-    border-bottom: 1px solid #EEF0F8;
-    padding: 4px;
-    color: #1A1A3E;
-}
-
-QTableWidget#modernTable::item:selected {
-    background-color: #F5F3FF;
-    color: #6C5CE7;
-    border-radius: 8px;
-}
-
-QHeaderView::section {
-    background-color: transparent;
-    border: none;
-    font-weight: 700;
-    color: #9B9BB0;
-    border-bottom: 2px solid #EEF0F8;
-    padding-bottom: 8px;
-    text-align: left;
-}
-
-/* --- Form Inputs --- */
-QLineEdit#formInput, QComboBox#formInput {
-    background-color: #F5F6FA;
-    border: none;
-    border-radius: 8px;
-    padding: 8px 12px;
-    font-size: 13px;
-    color: #1A1A3E;
-}
-
-QLineEdit#formInput:focus, QComboBox#formInput:focus {
-    border: 1.5px solid #6C5CE7;
-}
-
-/* --- Secondary Buttons --- */
 QPushButton#secondaryBtn {
-    background-color: #EEF0F8;
-    color: #9B9BB0;
+    background-color: rgba(255, 255, 255, 0.6);
+    color: #8A8A9E;
+    border: 1px solid rgba(255, 255, 255, 0.9);
     border-radius: 12px;
-    border: none;
     font-weight: 600;
     padding: 10px;
 }
-
 QPushButton#secondaryBtn:hover {
-    background-color: #E4E6F1;
+    background-color: rgba(255, 255, 255, 0.9);
     color: #1A1A3E;
 }
 
 QPushButton#dangerBtn {
-    background-color: #FCE4EC;
+    background-color: rgba(253, 121, 168, 0.15);
     color: #FD79A8;
+    border: 1px solid rgba(253, 121, 168, 0.3);
     border-radius: 12px;
-    border: none;
     font-weight: 600;
     padding: 10px;
 }
-
 QPushButton#dangerBtn:hover {
     background-color: #FD79A8;
     color: white;
 }
 
-/* =========================================
-   MODERN TABS (Budget View) 
-   ========================================= */
-QTabWidget#modernTabs::pane {
-    border: none;
-    background: transparent;
-    padding-top: 10px;
+/* --- Badges --- */
+QLabel#badgePaid, QLabel#badgeApproved {
+    background-color: rgba(108, 92, 231, 0.15);
+    color: #6C5CE7;
+    border-radius: 8px;
+    padding: 2px 8px;
+    font-size: 11px;
+    font-weight: 600;
+}
+QLabel#badgePending {
+    background-color: rgba(253, 121, 168, 0.15);
+    color: #FD79A8;
+    border-radius: 8px;
+    padding: 2px 8px;
+    font-size: 11px;
+    font-weight: 600;
 }
 
+/* --- Progress Bars --- */
+QProgressBar#bucketProgress, QProgressBar {
+    background-color: rgba(255, 255, 255, 0.5);
+    border-radius: 4px;
+    border: none;
+    height: 7px;
+    text-align: right;
+}
+QProgressBar::chunk { border-radius: 4px; background-color: #6C5CE7; }
+QProgressBar#bucketProgressPink::chunk { border-radius: 4px; background-color: #FD79A8; }
+QProgressBar#bucketProgressGreen::chunk { border-radius: 4px; background-color: #00B894; }
+
+/* --- Scrollbar & Tabs --- */
+QScrollArea { border: none; background: transparent; }
+QScrollBar:vertical {
+    border: none;
+    background: transparent;
+    width: 6px;
+    border-radius: 3px;
+}
+QScrollBar::handle:vertical {
+    background: rgba(108, 92, 231, 0.3);
+    border-radius: 3px;
+    min-height: 20px;
+}
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; }
+
+QTabWidget#modernTabs::pane { border: none; background: transparent; padding-top: 10px; }
 QTabBar::tab {
     background: transparent;
-    color: #9B9BB0;
+    color: #8A8A9E;
     font-family: 'Segoe UI';
     font-size: 14px;
     font-weight: 600;
@@ -472,42 +226,21 @@ QTabBar::tab {
     border-bottom: 2px solid transparent;
     margin-right: 12px;
 }
-
-QTabBar::tab:hover {
-    color: #6C5CE7;
-}
-
+QTabBar::tab:hover { color: #6C5CE7; }
 QTabBar::tab:selected {
     color: #6C5CE7;
     border-bottom: 3px solid #6C5CE7;
 }
 
-/* Fix for SpinBoxes inside the Form */
-QDoubleSpinBox#formInput, QSpinBox#formInput {
-    background-color: #F5F6FA;
-    border: none;
-    border-radius: 8px;
-    padding: 8px 12px;
-    font-size: 13px;
-    color: #1A1A3E;
-}
-
-QDoubleSpinBox#formInput:focus, QSpinBox#formInput:focus {
-    border: 1.5px solid #6C5CE7;
-}
-
+/* --- Dropdown Fix --- */
 QComboBox QAbstractItemView {
-    background-color: white;
+    background-color: rgba(255, 255, 255, 0.95);
     color: #1A1A3E;
-    selection-background-color: #F5F3FF;
+    selection-background-color: rgba(108, 92, 231, 0.15);
     selection-color: #6C5CE7;
-    border: 1px solid #EEF0F8;
+    border: 1px solid rgba(255, 255, 255, 0.9);
     border-radius: 8px;
     outline: none;
     padding: 4px;
 }
-
-QComboBox::drop-down {
-    border: none;
-    background: transparent;
-}
+QComboBox::drop-down { border: none; background: transparent; }

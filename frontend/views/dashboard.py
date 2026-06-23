@@ -147,7 +147,6 @@ class DashboardView(QWidget):
         self.card_overview.setObjectName("purpleOverviewCard")
         self.card_overview.setStyleSheet("""
             QFrame#purpleOverviewCard {
-                background-color: #6C5CE7;
                 border-radius: 16px;
             }
             QLabel { background: transparent; }

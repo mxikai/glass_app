@@ -286,9 +286,9 @@ class ReportsView(QWidget):
         
         html = "<h3>Financial Overview</h3>"
         html += "<table style='border: none;'><tr>"
-        html += f"<td style='border: none; width: 33%;'><div class='metric-box'><p class='metric-title'>Total Collected</p><p class='metric-value'>₱{totals.get('payments', 0):,.2f}</p></div></td>"
-        html += f"<td style='border: none; width: 33%;'><div class='metric-box'><p class='metric-title'>Total Expenses</p><p class='metric-value'>₱{totals.get('expenses', 0):,.2f}</p></div></td>"
-        html += f"<td style='border: none; width: 33%;'><div class='metric-box'><p class='metric-title'>Available Funds</p><p class='metric-value' style='color:#00B894;'>₱{totals.get('available_funds', 0):,.2f}</p></div></td>"
+        html += f"<td style='border: none; width: 33%;'><div class='metric-box'><p class='metric-title'>Total Collected</p><p class='metric-value'>₱{float(totals.get('payments') or 0):,.2f}</p></div></td>"
+        html += f"<td style='border: none; width: 33%;'><div class='metric-box'><p class='metric-title'>Total Expenses</p><p class='metric-value'>₱{float(totals.get('expenses') or 0):,.2f}</p></div></td>"
+        html += f"<td style='border: none; width: 33%;'><div class='metric-box'><p class='metric-title'>Available Funds</p><p class='metric-value' style='color:#00B894;'>₱{float(totals.get('available_funds') or 0):,.2f}</p></div></td>"
         html += "</tr></table>"
         
         html += "<h3>Collection Status</h3>"
@@ -302,18 +302,18 @@ class ReportsView(QWidget):
         if not data: return ""
         plan = data.get("plan", {})
         
-        html = f"<div class='metric-box'><p class='metric-title'>Total Planned Budget</p><p class='metric-value'>₱{plan.get('total_planned_budget', 0):,.2f}</p>"
-        html += f"<p class='metric-title' style='margin-top:10px;'>Semestral Fee Per Student</p><p class='metric-value' style='font-size: 16px;'>₱{plan.get('semestral_fee_amount', 0):,.2f}</p></div>"
+        html = f"<div class='metric-box'><p class='metric-title'>Total Planned Budget</p><p class='metric-value'>₱{float(plan.get('total_planned_budget') or 0):,.2f}</p>"
+        html += f"<p class='metric-title' style='margin-top:10px;'>Semestral Fee Per Student</p><p class='metric-value' style='font-size: 16px;'>₱{float(plan.get('semestral_fee_amount') or 0):,.2f}</p></div>"
         
         html += "<h3>Fund Buckets Allocation</h3><table><tr><th>ID</th><th>Bucket Name</th><th>Allocation Amount</th></tr>"
         for b in data.get("fund_buckets", []):
-            html += f"<tr><td>{b.get('bucket_id')}</td><td><b>{b.get('bucket_name')}</b></td><td>₱{b.get('planned_amount', 0):,.2f}</td></tr>"
+            html += f"<tr><td>{b.get('bucket_id')}</td><td><b>{b.get('bucket_name')}</b></td><td>₱{float(b.get('planned_amount') or 0):,.2f}</td></tr>"
         if not data.get("fund_buckets"): html += "<tr><td colspan='3'>No buckets configured.</td></tr>"
         html += "</table>"
         
         html += "<h3>Specific Budget Items</h3><table><tr><th>ID</th><th>Item Name</th><th>Type</th><th>Allocation</th></tr>"
         for i in data.get("budget_items", []):
-            html += f"<tr><td>{i.get('budget_item_id')}</td><td>{i.get('item_name')}</td><td><span class='badge'>{i.get('item_type')}</span></td><td>₱{i.get('planned_amount', 0):,.2f}</td></tr>"
+            html += f"<tr><td>{i.get('budget_item_id')}</td><td>{i.get('item_name')}</td><td><span class='badge'>{i.get('item_type')}</span></td><td>₱{float(i.get('planned_amount') or 0):,.2f}</td></tr>"
         if not data.get("budget_items"): html += "<tr><td colspan='4'>No items configured.</td></tr>"
         html += "</table>"
         return html
@@ -338,7 +338,7 @@ class ReportsView(QWidget):
         html = "<h3>Organization Expenses</h3><table><tr><th>Date</th><th>Budget Item</th><th>Line Items (Qty x Item @ Cost)</th><th>Amount Spent</th></tr>"
         for e in data.get("expenses", []):
             date = str(e.get('transaction_date', ''))[:10]
-            html += f"<tr><td>{date}</td><td><b>{e.get('budget_item_name')}</b></td><td style='color:#6C5CE7;'>{e.get('line_item_summary')}</td><td><b>₱{e.get('amount', 0):,.2f}</b></td></tr>"
+            html += f"<tr><td>{date}</td><td><b>{e.get('budget_item_name')}</b></td><td style='color:#6C5CE7;'>{e.get('line_item_summary')}</td><td><b>₱{float(e.get('amount') or 0):,.2f}</b></td></tr>"
         if not data.get("expenses"): html += "<tr><td colspan='4'>No expenses recorded.</td></tr>"
         html += "</table>"
         return html
@@ -348,7 +348,7 @@ class ReportsView(QWidget):
         html = "<h3>Physical Assets & Inventory</h3><table><tr><th>Item Name</th><th>Acquisition Source</th><th>Quantity</th><th>Unit Cost</th><th>Condition</th></tr>"
         for i in data.get("inventory_items", []):
             source = "Legacy" if i.get('source_type') == 'Legacy' else f"Txn #{i.get('transaction_id')}"
-            html += f"<tr><td><b>{i.get('item_name')}</b></td><td>{source}</td><td>{i.get('quantity')}</td><td>₱{i.get('unit_cost', 0):,.2f}</td><td><span class='badge'>{i.get('item_condition')}</span></td></tr>"
+            html += f"<tr><td><b>{i.get('item_name')}</b></td><td>{source}</td><td>{i.get('quantity')}</td><td>₱{float(i.get('unit_cost') or 0):,.2f}</td><td><span class='badge'>{i.get('item_condition')}</span></td></tr>"
         if not data.get("inventory_items"): html += "<tr><td colspan='5'>No inventory assets recorded.</td></tr>"
         html += "</table>"
         return html
