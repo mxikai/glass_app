@@ -14,7 +14,8 @@ from backend.services.budget_service import list_budget_plans
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QFrame, QProgressBar, QScrollArea, QTableWidget,
-    QTableWidgetItem, QHeaderView, QComboBox
+    QTableWidgetItem, QHeaderView, QComboBox,
+    QGraphicsDropShadowEffect
 )
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QPainter, QPen, QColor, QPainterPath
@@ -102,6 +103,14 @@ class DashboardView(QWidget):
         super().showEvent(event)
         self.load_plans()
 
+    def _apply_glow(self, widget):
+        """Applies a soft, transparent purple glow to simulate 3D glass depth."""
+        glow = QGraphicsDropShadowEffect(self)
+        glow.setBlurRadius(40)
+        glow.setColor(QColor(108, 92, 231, 35))
+        glow.setOffset(0, 8)
+        widget.setGraphicsEffect(glow)
+        
     def setup_ui(self):
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(28, 24, 28, 24)
@@ -142,63 +151,115 @@ class DashboardView(QWidget):
         left_col = QVBoxLayout()
         left_col.setSpacing(20)
 
-        # 1. Main Financial Overview Card (STRICT PURPLE)
-        self.card_overview = QFrame()
-        self.card_overview.setObjectName("purpleOverviewCard")
-        self.card_overview.setStyleSheet("""
-            QFrame#purpleOverviewCard {
+        # 1. TOP METRICS ROW (Three Separate Cards)
+        metrics_layout = QHBoxLayout()
+        metrics_layout.setSpacing(16) # Gap between the cards
+
+        # --- A. Available Funds ---
+        self.card_avail = QFrame()
+        self.card_avail.setStyleSheet("""
+            QFrame {
+                background-color: rgba(108, 92, 231, 0.65);
+                border-top: 1.5px solid rgba(255, 255, 255, 0.6);
+                border-left: 1.5px solid rgba(255, 255, 255, 0.4);
+                border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+                border-right: 1px solid rgba(255, 255, 255, 0.1);
                 border-radius: 16px;
             }
-            QLabel { background: transparent; }
+            QLabel { border: none; background: transparent; }
         """)
+        avail_layout = QVBoxLayout(self.card_avail)
+        avail_layout.setContentsMargins(20, 20, 20, 20)
         
-        overview_layout = QVBoxLayout(self.card_overview)
-        overview_layout.setContentsMargins(24, 24, 24, 24)
-        
-        metrics_layout = QHBoxLayout()
-        
-        avail_box = QVBoxLayout()
         avail_title = QLabel("Available Funds")
-        avail_title.setStyleSheet("color: rgba(255, 255, 255, 0.7); font-weight: 600; font-size: 13px; text-transform: uppercase;")
+        avail_title.setStyleSheet("color: rgba(255, 255, 255, 0.8); font-weight: bold; font-size: 12px; text-transform: uppercase;")
         self.lbl_avail_val = QLabel("₱ 0.00")
-        self.lbl_avail_val.setStyleSheet("color: #FFFFFF; font-size: 32px; font-weight: bold;")
-        avail_box.addWidget(avail_title)
-        avail_box.addWidget(self.lbl_avail_val)
+        self.lbl_avail_val.setStyleSheet("color: #FFFFFF; font-size: 26px; font-weight: bold;")
         
-        in_box = QVBoxLayout()
+        avail_layout.addWidget(avail_title)
+        avail_layout.addWidget(self.lbl_avail_val)
+        avail_layout.addStretch()
+
+        # --- B. Total Collected ---
+        self.card_in = QFrame()
+        self.card_in.setStyleSheet("""
+            QFrame {
+                background-color: rgba(255, 255, 255, 0.55);
+                border-top: 1.5px solid rgba(255, 255, 255, 0.9);
+                border-left: 1.5px solid rgba(255, 255, 255, 0.7);
+                border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+                border-right: 1px solid rgba(255, 255, 255, 0.3);
+                border-radius: 16px;
+            }
+            QLabel { border: none; background: transparent; }
+        """)
+        in_layout = QVBoxLayout(self.card_in)
+        in_layout.setContentsMargins(20, 20, 20, 20)
+        
         in_title = QLabel("Total Collected")
-        in_title.setStyleSheet("color: rgba(255, 255, 255, 0.7); font-weight: 600; font-size: 12px; text-transform: uppercase;")
+        in_title.setStyleSheet("color: #8A8A9E; font-weight: bold; font-size: 12px; text-transform: uppercase;")
         self.lbl_in_val = QLabel("₱ 0.00")
-        self.lbl_in_val.setStyleSheet("color: #FFFFFF; font-size: 20px; font-weight: bold;")
-        in_box.addWidget(in_title)
-        in_box.addWidget(self.lbl_in_val)
+        self.lbl_in_val.setStyleSheet("color: #1A1A3E; font-size: 26px; font-weight: bold;")
+        
+        in_layout.addWidget(in_title)
+        in_layout.addWidget(self.lbl_in_val)
+        in_layout.addStretch()
 
-        out_box = QVBoxLayout()
+        # --- C. Total Expenses ---
+        self.card_out = QFrame()
+        self.card_out.setStyleSheet("""
+            QFrame {
+                background-color: rgba(255, 255, 255, 0.55);
+                border-top: 1.5px solid rgba(255, 255, 255, 0.9);
+                border-left: 1.5px solid rgba(255, 255, 255, 0.7);
+                border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+                border-right: 1px solid rgba(255, 255, 255, 0.3);
+                border-radius: 16px;
+            }
+            QLabel { border: none; background: transparent; }
+        """)
+        out_layout = QVBoxLayout(self.card_out)
+        out_layout.setContentsMargins(20, 20, 20, 20)
+        
         out_title = QLabel("Total Expenses")
-        out_title.setStyleSheet("color: rgba(255, 255, 255, 0.7); font-weight: 600; font-size: 12px; text-transform: uppercase;")
+        out_title.setStyleSheet("color: #8A8A9E; font-weight: bold; font-size: 12px; text-transform: uppercase;")
         self.lbl_out_val = QLabel("₱ 0.00")
-        self.lbl_out_val.setStyleSheet("color: #FD79A8; font-size: 20px; font-weight: bold;")
-        out_box.addWidget(out_title)
-        out_box.addWidget(self.lbl_out_val)
+        self.lbl_out_val.setStyleSheet("color: #1A1A3E; font-size: 26px; font-weight: bold;")
+        
+        out_layout.addWidget(out_title)
+        out_layout.addWidget(self.lbl_out_val)
+        out_layout.addStretch()
 
-        metrics_layout.addLayout(avail_box)
-        metrics_layout.addStretch()
-        metrics_layout.addLayout(in_box)
-        metrics_layout.addSpacing(30)
-        metrics_layout.addLayout(out_box)
+        metrics_layout.addWidget(self.card_avail, stretch=1)
+        metrics_layout.addWidget(self.card_in, stretch=1)
+        metrics_layout.addWidget(self.card_out, stretch=1)
+
+        left_col.addLayout(metrics_layout)
+
+        # 2. SEPARATE CHART CARD
+        self.card_chart = QFrame()
+        self.card_chart.setStyleSheet("""
+            QFrame {
+                background-color: rgba(108, 92, 231, 0.65);
+                border-top: 1.5px solid rgba(255, 255, 255, 0.6);
+                border-left: 1.5px solid rgba(255, 255, 255, 0.4);
+                border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+                border-right: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 16px;
+            }
+            QLabel { border: none; background: transparent; }
+        """)
+        chart_layout = QVBoxLayout(self.card_chart)
+        chart_layout.setContentsMargins(24, 20, 24, 20)
         
         self.chart = MiniChart([], line_color="#FFFFFF") 
+        chart_layout.addWidget(self.chart)
         
-        overview_layout.addLayout(metrics_layout)
-        overview_layout.addSpacing(20)
-        overview_layout.addWidget(self.chart)
-        
-        # Helper text to explain the backend logic
         lbl_disclaimer = QLabel("* Financial metrics and chart reflect Approved & Active transactions only.")
         lbl_disclaimer.setStyleSheet("color: rgba(255, 255, 255, 0.5); font-size: 11px;")
-        overview_layout.addWidget(lbl_disclaimer)
+        chart_layout.addWidget(lbl_disclaimer)
         
-        left_col.addWidget(self.card_overview)
+        left_col.addWidget(self.card_chart)
 
         # 2. Recent Transactions Table Card
         self.card_recent = QFrame()
@@ -300,6 +361,14 @@ class DashboardView(QWidget):
         content_layout.addLayout(left_col, stretch=18)
         content_layout.addLayout(right_col, stretch=10)
         main_layout.addLayout(content_layout)
+        
+        self._apply_glow(self.card_avail)
+        self._apply_glow(self.card_in)
+        self._apply_glow(self.card_out)
+        self._apply_glow(self.card_chart)
+        self._apply_glow(self.card_recent)
+        self._apply_glow(self.card_status)
+        self._apply_glow(self.card_buckets)
 
     def load_plans(self):
         try:

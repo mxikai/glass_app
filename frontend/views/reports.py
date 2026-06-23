@@ -13,9 +13,11 @@ from backend.services.budget_service import list_budget_plans
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
     QPushButton, QComboBox, QFrame, QListWidget, 
-    QTextBrowser, QFileDialog, QMessageBox, QListWidgetItem
+    QTextBrowser, QFileDialog, QMessageBox, QListWidgetItem,
+    QGraphicsDropShadowEffect
 )
 from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QColor
 
 class ReportsView(QWidget):
     def __init__(self, parent=None):
@@ -39,6 +41,14 @@ class ReportsView(QWidget):
         super().showEvent(event)
         self.load_all_data()
 
+    def _apply_glow(self, widget):
+        """Applies a soft, transparent purple glow to simulate 3D glass depth."""
+        glow = QGraphicsDropShadowEffect(self)
+        glow.setBlurRadius(40)
+        glow.setColor(QColor(108, 92, 231, 35))
+        glow.setOffset(0, 8)
+        widget.setGraphicsEffect(glow)
+        
     def setup_ui(self):
         main_layout = QHBoxLayout(self)
         main_layout.setContentsMargins(28, 24, 28, 24)
@@ -159,6 +169,8 @@ class ReportsView(QWidget):
 
         main_layout.addLayout(left_col, stretch=1)
         main_layout.addWidget(self.right_panel, stretch=2)
+        
+        self._apply_glow(self.right_panel)
 
     def load_all_data(self):
         try:
@@ -302,8 +314,10 @@ class ReportsView(QWidget):
         if not data: return ""
         plan = data.get("plan", {})
         
-        html = f"<div class='metric-box'><p class='metric-title'>Total Planned Budget</p><p class='metric-value'>₱{float(plan.get('total_planned_budget') or 0):,.2f}</p>"
-        html += f"<p class='metric-title' style='margin-top:10px;'>Semestral Fee Per Student</p><p class='metric-value' style='font-size: 16px;'>₱{float(plan.get('semestral_fee_amount') or 0):,.2f}</p></div>"
+        html = "<table style='border: none;'><tr>"
+        html += f"<td style='border: none; width: 50%;'><div class='metric-box'><p class='metric-title'>Total Planned Budget</p><p class='metric-value'>₱{float(plan.get('total_planned_budget') or 0):,.2f}</p></div></td>"
+        html += f"<td style='border: none; width: 50%;'><div class='metric-box'><p class='metric-title'>Semestral Fee Per Student</p><p class='metric-value'>₱{float(plan.get('semestral_fee_amount') or 0):,.2f}</p></div></td>"
+        html += "</tr></table>"
         
         html += "<h3>Fund Buckets Allocation</h3><table><tr><th>ID</th><th>Bucket Name</th><th>Allocation Amount</th></tr>"
         for b in data.get("fund_buckets", []):

@@ -18,9 +18,11 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, 
     QLabel, QLineEdit, QPushButton, QTableWidget, 
     QTableWidgetItem, QHeaderView, QMessageBox, 
-    QComboBox, QFrame, QDoubleSpinBox, QSpinBox, QTabWidget, QStackedWidget
+    QComboBox, QFrame, QDoubleSpinBox, QSpinBox, QTabWidget, QStackedWidget,
+    QGraphicsDropShadowEffect
 )
 from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QColor
 
 class BudgetPlanView(QWidget):
     def __init__(self, parent=None):
@@ -44,6 +46,14 @@ class BudgetPlanView(QWidget):
         super().showEvent(event)
         self.load_all_data()
 
+    def _apply_glow(self, widget):
+        """Applies a soft, transparent purple glow to simulate 3D glass depth."""
+        glow = QGraphicsDropShadowEffect(self)
+        glow.setBlurRadius(40)
+        glow.setColor(QColor(108, 92, 231, 35))
+        glow.setOffset(0, 8)
+        widget.setGraphicsEffect(glow)
+        
     def setup_ui(self):
         main_layout = QHBoxLayout(self)
         main_layout.setContentsMargins(28, 24, 28, 24)
@@ -123,6 +133,8 @@ class BudgetPlanView(QWidget):
 
         main_layout.addLayout(left_col, stretch=1)
         main_layout.addWidget(self.right_panel)
+        
+        self._apply_glow(self.right_panel)
 
     def _create_table(self, headers):
         table = QTableWidget()
