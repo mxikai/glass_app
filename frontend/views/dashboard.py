@@ -110,6 +110,19 @@ class DashboardView(QWidget):
         glow.setColor(QColor(108, 92, 231, 35))
         glow.setOffset(0, 8)
         widget.setGraphicsEffect(glow)
+    
+    def mousePressEvent(self, event):
+        """Clears the table highlight AND resets the form when clicking the background."""
+        super().mousePressEvent(event)
+        
+        from PyQt6.QtWidgets import QTableWidget
+        for table in self.findChildren(QTableWidget):
+            table.clearSelection()
+            
+        if hasattr(self, 'clear_form'):
+            self.clear_form()
+        elif hasattr(self, 'clear_current_form'):
+            self.clear_current_form()
         
     def setup_ui(self):
         main_layout = QVBoxLayout(self)
