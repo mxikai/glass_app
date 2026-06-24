@@ -88,9 +88,9 @@ QTableWidget#modernTable::item {
     color: #1A1A3E;
 }
 QTableWidget#modernTable::item:selected {
-    background-color: rgba(108, 92, 231, 0.15);
+    background-color: #d6d3fd; 
     color: #6C5CE7;
-    border-radius: 8px;
+    border-radius: 6px;
 }
 QHeaderView::section {
     background-color: transparent;
